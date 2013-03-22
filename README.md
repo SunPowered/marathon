@@ -5,10 +5,10 @@ This is the README
 
 # Goal
 
-The intent of this project is to create a script that is able to parse protein database (.pdb) files
+The intent of this project is to create a script that is able to parse protein database (_.pdb_) files
 and compute the various rotational permutations at determined initial loop sites.  The rotation
 can either be in increments of 45 or 90 degrees in all 3 dimensions.  The various folded structures
-are then written back to a .pdb format.
+are then written back to a _.pdb_ format.
 
 # Usage
 
@@ -21,13 +21,13 @@ The program is run from the command line using python 2.7.  It takes the followi
 
 ## Examples
 
-	`rot_perms.py --output myoutputdir --file mydatafile.pdb`
+`rotate_pdb.py --output myoutputdir --file mydatafile.pdb`
 	
-	will output all rotational permuatations of `mydatafile.pdb` to `myoutputdir`
+will output all rotational permuatations of `mydatafile.pdb` to `myoutputdir`
 
 
 
 # Help
 
-Run `rot_perm.py --help`
+Run `rotate_pdb.py --help`
 
