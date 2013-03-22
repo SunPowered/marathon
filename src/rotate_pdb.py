@@ -1,5 +1,53 @@
 #!/usr/bin/env python
+"""
+PDB support files gracefully borrored from mmLib <http://pymmlib.sourceforge.net/>
+"""
+import sys
+import os
 
+import PDB
+
+__version__ = 0.1
+
+class PDBfile(object):
+	"""PDB File to read modify and write"""
+
+	def __init__(self, file_name, verbose=False):
+		"""Arguments: 
+			file_name:  The file to read"""
+		self.file_name = file_name
+		self.verbose = verbose
+		self.data = []
+		self.read()
+
+	def __str__(self):
+		return str(self.data)
+	
+	def read(self):
+			
+		if not os.path.isfile(self.file_name):
+			raise FileError("File {} not found".format(self.file_name))
+		self.data = PDB.PDBFile()
+		self.data.load_file(self.file_name)
+		if self.verbose:
+			print "Loaded file {}".format(self.file_name)
+
+	def write(self, file_name):
+		pdb_file = PDB.PDBFile()
+		if self.verbose:
+			print "Writing to file {}".format(file_name)
+
+		pdb_file.save_file(self.data, file_name)
+
+def tests():
+	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+	test_file = os.path.join(basedir, "data", "initialGraphs", "1B36_A_Graph.pdb")
+
+	test_pdb = PDBfile(test_file)
+	
+	print test_pdb
+	
+	
 
 if __name__ == "__main__":
 	import argparse
@@ -7,7 +55,50 @@ if __name__ == "__main__":
 	parser.add_argument("-v", "--verbose", help="Print details to console", action="store_true")
 	parser.add_argument("-d", "--directory", help="Parse all PDB files in this directory", action="store")
 	parser.add_argument("-o", "--output", help="Output new PDB files to this directory", action="store")
-	
+	parser.add_argument("-f", "--file", help="Single PDB file to process", action="store")
+	parser.add_argument("--test", help="Run the testing script and exit", action="store_true", default=False)
 	args = parser.parse_args()
 
-	print args
+	print
+	print "Permuting Rotations v{}".format(__version__)
+	print 
+	
+	if args.test:
+		
+		print "Running tests"
+		tests()
+		sys.exit(1)
+		
+	if args.verbose:
+		print "Verbose enabled"
+
+		print "Arguments received: {}".format( args)
+
+	if args.output:
+		print "Saving output files to directory {}".format(args.output)	
+		if not os.path.isdir(args.output):
+			if args.verbose:
+				print "Creating {}".format(args.output)
+			os.mkdir(args.output)
+
+	if args.directory:
+		if not os.path.isdir(args.directory):
+			print "Uh oh, the directory {} does not exist. Exiting".format(args.directory)
+			sys.exit(1)
+
+		print "Scanning directory {} for .pdb files".format(args.directory)
+
+		for f in os.listdir(args.directory):
+			print "Running rotational permutations on file:  {}".format(f)
+			# Run perms on file
+
+	if args.file:
+		if not os.path.isfile(args.file):
+			print "File {} does not exist. Exiting"
+			sys.exit(1)
+
+		print "Running rotational permutations on file: {}".format(args.file)
+			
+	print "Finished.  Have a nice day"
+
+
