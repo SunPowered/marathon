@@ -1,0 +1,14 @@
+ATOM      1  N     G A   1      -14.35      -0      -0  1.00 99.99           N
+ATOM      2  C     G A   2      -14.35      -0      -0  1.00 99.99           C
+ATOM      3  N     G A   3      43.306       0       0  1.00 99.99           N
+ATOM      4  C     G A   4      36.452       0       0  1.00 99.99           C
+ATOM      5  N     G A   5      12.486       0       0  1.00 99.99           N
+ATOM      6  C     G A   6           0       0       0  1.00 99.99           C
+ATOM      7  C     G A   7      24.972       0       0  1.00 99.99           C
+TER
+CONECT    1    2
+CONECT    2    6
+CONECT    3    4
+CONECT    4    7
+CONECT    5    6
+CONECT    5    7
