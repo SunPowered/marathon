@@ -4,13 +4,37 @@ PDB support files gracefully borrored from mmLib <http://pymmlib.sourceforge.net
 """
 import sys
 import os
-
+import copy
 import math
-import numpy
+from pprint import pprint
+
+try:
+	import numpy
+except ImportError:
+	print "This program requires numpy to be installed.  Try `pip install numpy`"
+	sys.exit(1)
 
 import PDB
+import rotations
 
 __version__ = 0.1
+precision = 2 	# Number of decimals to save in float values
+
+def Rz(alpha):
+	"""Rotation matrix around the z axis"""
+
+	cosa = math.cos(alpha)
+	sina = math.sin(alpha)
+
+	return numpy.array([[cosa, -sina, 0], [sina, cosa, 0],[0, 0, 1]])
+
+def Ry(alpha):
+	"""Rotation matrix around the y axis"""
+	cosa = math.cos(alpha)
+	sina = math.sin(alpha)
+
+	return numpy.array([[cosa, 0, -sina], [0, 1, 0], [sina, 0, cosa]])
+
 
 def rotation_matrices(N=4, verbose=False):
 	"""Split the circle into N equal sections and permute rotatations around
@@ -30,18 +54,6 @@ def rotation_matrices(N=4, verbose=False):
 		print "step: {}".format(step)
 
 	
-	def Rz(n):
-		cosa = math.cos(n*step)
-		sina = math.sin(n*step)
-
-		return numpy.array([[cosa, -sina, 0], [sina, cosa, 0],[0, 0, 1]])
-
-	def Ry(n):
-		cosa = math.cos(n*step)
-		sina = math.sin(n*step)
-
-		return numpy.array([[cosa, 0, -sina], [0, 1, 0], [sina, 0, cosa]])
-
 	matrices = []
 
 	
@@ -49,7 +61,7 @@ def rotation_matrices(N=4, verbose=False):
 		if (ny == -N/4) or (ny == N/4):
 			if verbose:
 				print "Ny: {}".format(ny)
-			matrices.append(Ry(ny))
+			matrices.append(Ry(ny*step))
 			continue
 		for nz in xrange(N):
 			if verbose:
@@ -61,7 +73,7 @@ def rotation_matrices(N=4, verbose=False):
 					print "Ignoring nz {} / ny {}".format(nz, ny)
 				continue
 
-			matrices.append(numpy.dot(Rz(nz), Ry(ny)))
+			matrices.append(numpy.dot(Rz(nz*step), Ry(ny*step)))
 	return matrices
 	
 class PDBfile(object):
@@ -74,7 +86,7 @@ class PDBfile(object):
 		self.verbose = verbose
 		self.data = []
 		self.atoms = []
-
+		self.internal_loops = []
 		self.read()
 
 	def __str__(self):
@@ -125,9 +137,54 @@ class PDBfile(object):
 			if is_IL:
 				loops.append(atom)
 
+		
 		if self.verbose:
 			print "Found {} internal loops".format(len(loops))
+			pprint(loops)
 		return loops
+
+	def update_data(self):
+		"""Update the coordinates of the data elements"""
+		for atom in self.atoms:
+			for a in self.data:
+				if not "element" in a:
+					# Not an atom item
+					continue
+				if a['resSeq'] == atom.seq_id:
+					a['x'] = atom.X
+					a['y'] = atom.Y
+					a['z'] = atom.Z
+
+	def find_first(self):
+		"""Look for node with only 1 bond"""
+
+		for atom in self.atoms:
+			if len(atom.bonds) == 1:
+				return atom
+	
+	def get_atom_by_id(self, atom_id):
+		r =  [atom for atom in self.atoms if atom.seq_id == atom_id]
+		if len(r) == 0:
+			return None
+		else:
+			return r[0]
+
+	def get_subtree(self, atom, parent, data=[]):
+		"""Returns the molecule after a given atom, traversing away from a parent """
+		
+		if len(atom.bonds) == 1:
+			# End of a chain, return the data tree obtained
+			return data
+		for bond_id in atom.bonds:
+			bonded_atom = self.get_atom_by_id(bond_id)
+			if bonded_atom.seq_id == parent.seq_id:
+				continue
+
+			data.append(bonded_atom)
+			self.get_subtree(bonded_atom, atom, data=data)
+
+		return data
+
 
 
 	def add_bond(self, bond):
@@ -144,6 +201,7 @@ class PDBfile(object):
 		self.data = PDB.PDBFile()
 		self.data.load_file(self.file_name)
 		self.load_atoms()
+		self.internal_loops = self.get_internal_loops()
 		if self.verbose:
 			print "Loaded file {}".format(self.file_name)
 	
@@ -166,6 +224,7 @@ class PDBAtom(object):
 		self.X = atom.get("x", 0.0)
 		self.Y = atom.get("y", 0.0)
 		self.Z = atom.get("z", 0.0)
+		
 
 		self.bonds = []
 
@@ -175,6 +234,41 @@ class PDBAtom(object):
 
 	def __repr__(self):
 		return "PDBAtom {} ({}) at ({}, {}, {}).  Bond({})".format(self.seq_id, self.element, self.X, self.Y, self.Z, self.bonds)
+
+	def rotate(self, matrix, point=numpy.array([0,0,0]), direction=numpy.array([1, 0,0]), verbose=False):
+		"""Rotates the  atom with respect to a point and direction
+		matrix is a 3x3 rotation matrix
+		point is a 3 dimensional vector
+		direction is a 3 dimensional unit vector in the base coordinates
+		"""
+		if verbose:
+			print "Rotating atom with rotation matrix"
+			pprint(matrix)
+			print "rotation point: {}".format(point)
+			print "direction: {}".format(direction)
+
+		rc = self.coordinates - point
+
+		# Shift coordinates having the direction vector point along the x-axis
+		R  = numpy.identity(3)	
+		rotations.R_2vect(R, numpy.array([1,0,0]), direction)
+		rc = numpy.dot(R, rc)
+		
+		# apply rotation matrix to this rotated point
+		rc = numpy.dot(matrix, rc)
+
+		# Revert back to original coordinates
+		rc = numpy.dot(numpy.linalg.inv(R), rc)
+		rc = rc + point
+
+		# Save coordinates to atom
+		self.X = round(rc[0], precision)
+		self.Y = round(rc[1], precision)
+		self.Z = round(rc[2], precision)
+
+		
+
+		
 
 def roation_permuations_from_file(pdb_file, rotation="cubic", verbose=False):
 
@@ -195,14 +289,35 @@ def tests():
 	test_file = os.path.join(basedir, "data", "initialGraphs", "1B36_A_Graph.pdb")
 
 	test_pdb = PDBfile(test_file, verbose=True)
-	print test_pdb.atoms
+	pprint(test_pdb.atoms)
+	
 	#print test_pdb
-	#print test_pdb.get_internal_loops()
-	pprint(len(rotation_matrices(N=4, verbose=True)))
-
-	rotation = "cubic"
+	#test_pdb.internal_loops
+	#rots = rotation_matrices(N=4, verbose=True)
+	#pprint(len(rots))
+	#pprint(rots)
+	#rotation = "cubic"
 
 	#test_pdb.write(os.path.join(basedir, "tmp", "test.pdb"))
+	
+	#first_loop = test_pdb.internal_loops[0]
+	
+	#parent = test_pdb.get_atom_by_id(first_loop.bonds[1])
+	#print first_loop
+	#print parent
+	#subtree = test_pdb.get_subtree(first_loop, parent)
+	#pprint(subtree)
+
+	Rs = rotation_matrices(N=4)
+	R = Rs[0]
+
+	tt = copy.deepcopy(test_pdb)
+	first_a = tt.atoms[0]
+
+	print first_a
+	first_a.rotate(R)
+	print first_a
+
 
 if __name__ == "__main__":
 	import argparse
