@@ -44,6 +44,37 @@ class PDBfile(object):
 					print "Found bond: {}".format(atom)
 				self.add_bond(atom)
 	
+	def get_internal_loops(self):
+		"""Internal loops defined as any element N, surrounded by C's"""
+		loops = []
+		if self.verbose:
+			print "Looking for internal loops"
+
+		for atom in self.atoms:
+			if atom.element != "N":
+				continue
+
+			bonds = atom.bonds
+			if len(bonds) < 2:
+				continue
+
+			is_IL = True
+
+			for bond in bonds:
+				for a in self.atoms:
+					if a.seq_id == bond:
+						if a.element != "C":
+							is_IL = False
+							break
+
+			if is_IL:
+				loops.append(atom)
+
+		if self.verbose:
+			print "Found {} internal loops".format(len(loops))
+		return loops
+
+
 	def add_bond(self, bond):
 		"""Add a bond connection"""
 		n1 = bond.get("serial")
@@ -98,7 +129,7 @@ def tests():
 	test_pdb = PDBfile(test_file, verbose=True)
 	print test_pdb.atoms
 	#print test_pdb
-
+	print test_pdb.get_internal_loops()
 	
 	#test_pdb.write(os.path.join(basedir, "tmp", "test.pdb"))
 
