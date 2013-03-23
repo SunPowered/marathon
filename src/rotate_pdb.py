@@ -5,10 +5,65 @@ PDB support files gracefully borrored from mmLib <http://pymmlib.sourceforge.net
 import sys
 import os
 
+import math
+import numpy
+
 import PDB
 
 __version__ = 0.1
 
+def rotation_matrices(N=4, verbose=False):
+	"""Split the circle into N equal sections and permute rotatations around
+	the Y and Z axis this many times.  I.e. cubic rotations, N=4.  Triangular 
+	rotations, N=8.  Ignore the case when the rotation angle is [pi/2, 0]
+	
+	Assumes the original bond vector is along the X axis, these rotations must
+	be adjusted if the original vector is off
+	"""
+	if N not in [4, 8]:
+		raise ValueError("Only N of 4 and 8 are currently supported")
+
+	step = 2*numpy.pi/N
+	
+	if verbose:
+		print "Rotation Matrices with N: {}".format(N)
+		print "step: {}".format(step)
+
+	
+	def Rz(n):
+		cosa = math.cos(n*step)
+		sina = math.sin(n*step)
+
+		return numpy.array([[cosa, -sina, 0], [sina, cosa, 0],[0, 0, 1]])
+
+	def Ry(n):
+		cosa = math.cos(n*step)
+		sina = math.sin(n*step)
+
+		return numpy.array([[cosa, 0, -sina], [0, 1, 0], [sina, 0, cosa]])
+
+	matrices = []
+
+	
+	for ny in xrange(-N/4, N/4+1):
+		if (ny == -N/4) or (ny == N/4):
+			if verbose:
+				print "Ny: {}".format(ny)
+			matrices.append(Ry(ny))
+			continue
+		for nz in xrange(N):
+			if verbose:
+				print "Nz: {} / Ny: {}".format(nz,ny)
+
+			if (nz*step == numpy.pi/2) and (ny == 0 ):
+				# Ignore the rotation that turns it on the incoming bond
+				if verbose:
+					print "Ignoring nz {} / ny {}".format(nz, ny)
+				continue
+
+			matrices.append(numpy.dot(Rz(nz), Ry(ny)))
+	return matrices
+	
 class PDBfile(object):
 	"""PDB File to read modify and write"""
 
@@ -135,14 +190,15 @@ def roation_permuations_from_file(pdb_file, rotation="cubic", verbose=False):
 		
 
 def tests():
+	from pprint import pprint
 	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 	test_file = os.path.join(basedir, "data", "initialGraphs", "1B36_A_Graph.pdb")
 
 	test_pdb = PDBfile(test_file, verbose=True)
 	print test_pdb.atoms
 	#print test_pdb
-	print test_pdb.get_internal_loops()
-	
+	#print test_pdb.get_internal_loops()
+	pprint(len(rotation_matrices(N=4, verbose=True)))
 
 	rotation = "cubic"
 
