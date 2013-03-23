@@ -121,6 +121,18 @@ class PDBAtom(object):
 	def __repr__(self):
 		return "PDBAtom {} ({}) at ({}, {}, {}).  Bond({})".format(self.seq_id, self.element, self.X, self.Y, self.Z, self.bonds)
 
+def roation_permuations(pdb_file, rotation="cubic", verbose=False):
+
+
+	print "Running rotational permutations on file:  {}".format(pdb_file)
+	
+	# Read file and find internal loops
+
+	f = PDBfile(pdb_file, verbose=verbose)
+	loops = f.get_internal_loops()
+
+	# If there are loops, then prepare the sub directory to save 
+		
 
 def tests():
 	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -131,6 +143,9 @@ def tests():
 	#print test_pdb
 	print test_pdb.get_internal_loops()
 	
+
+	rotation = "cubic"
+
 	#test_pdb.write(os.path.join(basedir, "tmp", "test.pdb"))
 
 if __name__ == "__main__":
@@ -140,6 +155,8 @@ if __name__ == "__main__":
 	parser.add_argument("-d", "--directory", help="Parse all PDB files in this directory", action="store")
 	parser.add_argument("-o", "--output", help="Output new PDB files to this directory", action="store")
 	parser.add_argument("-f", "--file", help="Single PDB file to process", action="store")
+	parser.add_argument("-c", "--cubic", help="Rotate around a cubic structure, i.e. 90 deg", action="store_true")
+	parser.add_argument("-t", "--triangular", help="Roatate around a triangular structure, i.e. 45 deg", action="store_true")
 	parser.add_argument("--test", help="Run the testing script and exit", action="store_true", default=False)
 	args = parser.parse_args()
 
@@ -165,6 +182,12 @@ if __name__ == "__main__":
 				print "Creating {}".format(args.output)
 			os.mkdir(args.output)
 
+	rotation_method = "cubic"
+	if args.triangular:
+		rotation_method = "triangular"
+	if args.verbose:
+		print "Using {} rotation structure".format(rotation_method)
+
 	if args.directory:
 		if not os.path.isdir(args.directory):
 			print "Uh oh, the directory {} does not exist. Exiting".format(args.directory)
@@ -173,15 +196,19 @@ if __name__ == "__main__":
 		print "Scanning directory {} for .pdb files".format(args.directory)
 
 		for f in os.listdir(args.directory):
-			print "Running rotational permutations on file:  {}".format(f)
+			
+			rotation_perms_from_file(f, rotation=rotation_method)
+
+
 			# Run perms on file
 
 	if args.file:
 		if not os.path.isfile(args.file):
 			print "File {} does not exist. Exiting"
 			sys.exit(1)
-
-		print "Running rotational permutations on file: {}".format(args.file)
+		
+		rotation_perms_from_file(f, rotation=rotation_method)
+		i#print "Running rotational permutations on file: {}".format(args.file)
 			
 	print "Finished.  Have a nice day"
 
