@@ -18,21 +18,49 @@ class PDBfile(object):
 		self.file_name = file_name
 		self.verbose = verbose
 		self.data = []
-		self.read()
 		self.atoms = []
+
+		self.read()
 
 	def __str__(self):
 		return str(self.data)
 	
+	def load_atoms(self):
+		if not self.data:
+			if self.verbose:
+				print "Loading atoms for empty data"
+
+			return
+
+		for atom in self.data:
+			if "element" in atom:
+				# add atom
+				if self.verbose:
+					print "Found atom: {}".format(atom)
+				self.atoms.append(PDBAtom(atom))
+			elif "serialBond1" in atom:
+				# Add bond
+				if self.verbose:
+					print "Found bond: {}".format(atom)
+				self.add_bond(atom)
+	
+	def add_bond(self, bond):
+		"""Add a bond connection"""
+		n1 = bond.get("serial")
+		n2 = bond.get("serialBond1")
+		[atom.bonds.append(n2) for atom in self.atoms if atom.seq_id == n1]
+		[atom.bonds.append(n1) for atom in self.atoms if atom.seq_id == n2]
+
 	def read(self):
 			
 		if not os.path.isfile(self.file_name):
 			raise FileError("File {} not found".format(self.file_name))
 		self.data = PDB.PDBFile()
 		self.data.load_file(self.file_name)
-		
+		self.load_atoms()
 		if self.verbose:
 			print "Loaded file {}".format(self.file_name)
+	
 
 	def write(self, file_name):
 		if self.verbose:
@@ -40,15 +68,39 @@ class PDBfile(object):
 
 		self.data.save_file(open(file_name, 'w'))
 
+
+class PDBAtom(object):
+	"""Data structure for each atom, holds the atom informationn as well as 
+	bonding information"""
+
+	def __init__(self, atom):
+		"""Atom is a dict read from the PDB file"""
+		self.element = atom.get("element")
+		self.seq_id = atom.get("resSeq", 0)
+		self.X = atom.get("x", 0.0)
+		self.Y = atom.get("y", 0.0)
+		self.Z = atom.get("z", 0.0)
+
+		self.bonds = []
+
+	@property
+	def coordinates(self):
+		return numpy.array([self.X, self.Y, self.Z])
+
+	def __repr__(self):
+		return "PDBAtom {} ({}) at ({}, {}, {}).  Bond({})".format(self.seq_id, self.element, self.X, self.Y, self.Z, self.bonds)
+
+
 def tests():
 	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 	test_file = os.path.join(basedir, "data", "initialGraphs", "1B36_A_Graph.pdb")
 
 	test_pdb = PDBfile(test_file, verbose=True)
+	print test_pdb.atoms
+	#print test_pdb
+
 	
-	print test_pdb
-	
-	test_pdb.write(os.path.join(basedir, "tmp", "test.pdb"))
+	#test_pdb.write(os.path.join(basedir, "tmp", "test.pdb"))
 
 if __name__ == "__main__":
 	import argparse
