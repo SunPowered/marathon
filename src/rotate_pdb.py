@@ -19,6 +19,7 @@ class PDBfile(object):
 		self.verbose = verbose
 		self.data = []
 		self.read()
+		self.atoms = []
 
 	def __str__(self):
 		return str(self.data)
@@ -29,25 +30,25 @@ class PDBfile(object):
 			raise FileError("File {} not found".format(self.file_name))
 		self.data = PDB.PDBFile()
 		self.data.load_file(self.file_name)
+		
 		if self.verbose:
 			print "Loaded file {}".format(self.file_name)
 
 	def write(self, file_name):
-		pdb_file = PDB.PDBFile()
 		if self.verbose:
 			print "Writing to file {}".format(file_name)
 
-		pdb_file.save_file(self.data, file_name)
+		self.data.save_file(open(file_name, 'w'))
 
 def tests():
 	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 	test_file = os.path.join(basedir, "data", "initialGraphs", "1B36_A_Graph.pdb")
 
-	test_pdb = PDBfile(test_file)
+	test_pdb = PDBfile(test_file, verbose=True)
 	
 	print test_pdb
 	
-	
+	test_pdb.write(os.path.join(basedir, "tmp", "test.pdb"))
 
 if __name__ == "__main__":
 	import argparse
