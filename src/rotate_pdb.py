@@ -121,7 +121,7 @@ class PDBAtom(object):
 	def __repr__(self):
 		return "PDBAtom {} ({}) at ({}, {}, {}).  Bond({})".format(self.seq_id, self.element, self.X, self.Y, self.Z, self.bonds)
 
-def roation_permuations(pdb_file, rotation="cubic", verbose=False):
+def roation_permuations_from_file(pdb_file, rotation="cubic", verbose=False):
 
 
 	print "Running rotational permutations on file:  {}".format(pdb_file)
@@ -197,7 +197,7 @@ if __name__ == "__main__":
 
 		for f in os.listdir(args.directory):
 			
-			rotation_perms_from_file(f, rotation=rotation_method)
+			rotation_permutationss_from_file(f, rotation=rotation_method, verbose=args.verbose)
 
 
 			# Run perms on file
@@ -207,8 +207,8 @@ if __name__ == "__main__":
 			print "File {} does not exist. Exiting"
 			sys.exit(1)
 		
-		rotation_perms_from_file(f, rotation=rotation_method)
-		i#print "Running rotational permutations on file: {}".format(args.file)
+		rotation_permutations_from_file(f, rotation=rotation_method, verbose=args.verbose)
+		#print "Running rotational permutations on file: {}".format(args.file)
 			
 	print "Finished.  Have a nice day"
 
