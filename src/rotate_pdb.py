@@ -16,7 +16,7 @@ except ImportError:
 import PDB
 #import rotations
 
-__version__ = 0.1
+__version__ = 0.5
 precision = 2 	# Number of decimals to save in float values
 plot_extension = ".pdf"
 figure_size = [10, 10]
