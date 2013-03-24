@@ -29,9 +29,17 @@ The program is run from the command line using python 2.7.  It takes the followi
 	
 will output all rotational permuatations of `mydatafile.pdb` to `myoutputdir`
 
+# Requirements
 
+The following packages must be installed in the python path:
+
+	* numpy <http://www.numpy.org/>
+	* matplotlib (Required for plotting) <http://matplotlib.org/>
 
 # Help
 
 Run `rotate_pdb.py --help` to get a list of available options
 
+# Author
+
+This script was writting by Tim van Boxtel - 2013
