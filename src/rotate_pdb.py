@@ -111,20 +111,24 @@ class PDBfile(object):
 		carbon_atoms = [atom for atom in self.atoms if atom.element=="C"]
 		internal_loops = [atom for atom in self.internal_loops]
 		nitrogen_atoms = [atom for atom in self.atoms if atom.element == "N" and atom not in internal_loops] 
-		other_atoms = [atom for atom in self.atoms if (atom not in carbon_atoms) or (atom not in nitrogen_atoms)]
+		other_atoms = [atom for atom in self.atoms if (atom not in carbon_atoms) and (atom not in nitrogen_atoms) and (atom not in internal_loops)]
 
 		lines = {"x":[], "y":[], "z":[] }
 
-		carbon = {"colour": "black",
-				"size": 50}
-		nitrogen = {"colour": "red",
-				"size": 50}
-		other = {"colour": "grey",
-				"size":50}
-
-		in_loop = {"colour": "w",
-				"size": 100}
-
+		default_style = {"color": "k",
+				"size": 50,
+				"edgecolors": 'none'}
+		carbon_style = default_style.copy()
+		nitrogen_style = default_style.copy()
+		nitrogen_style.update({"color": 'r'})
+		il_style = default_style.copy()
+		il_style.update({"color": "w",
+			"size": 100,
+			"edgecolors": "k"})
+		other_style = default_style.copy()
+		other_style.update({"color": 'y'})
+	
+		
 		for atom in self.atoms:
 			for bond_id in atom.bonds:
 				b_atom = self.get_atom_by_id(bond_id)
@@ -136,24 +140,50 @@ class PDBfile(object):
 		#ax.plot(lines["x"], lines["y"], zs=lines["z"], lw=2, c="black")
 		#ax.plot(x,y,z, lw=2, c="black")
 
-		
 		leg = {"handlers":[], "labels":[]}
-		for label, atoms, style in [("Carbon", carbon_atoms, carbon), 
-				("Nitrogen", nitrogen_atoms, nitrogen),
-				("Internal Loops", internal_loops,in_loop), 
-				("Other", other_atoms, other)]:
-			xs = [atom.X for atom in atoms]
-			ys = [atom.Y for atom in atoms]
-			zs = [atom.Z for atom in atoms]
+		plot_atoms = {
+			"Carbon": {"atoms": carbon_atoms,
+				"style" : carbon_style},
+			"Nitrogen": {"atoms": nitrogen_atoms,
+				"style": nitrogen_style},
+			"Internal Loop": {"atoms": internal_loops,
+				"style": il_style},
+			"Other": {"atoms": other_atoms, 
+				"style": other_style}}
 
-			pl = ax.scatter(xs, ys, zs=zs, zdir="z", edgecolors='none', facecolor=style["colour"], s=style["size"], marker="o", label=label)
-			leg["handlers"].append(plt.Circle((0,0), fc=style["colour"]))
+		def atom_onpick(event):
+			lbl = event.artist.get_label()
+			ind = event.ind
+			
+			print
+			print "Selection"
+			print "lbl: {} / ind: {}".format(lbl, ind)
+			pprint(plot_atoms[lbl]["atoms"][ind[0]])
+
+			#atom = plot_atoms[lbl]["atoms"][ind[0]]
+			#print "Selected atom: {}".format(atom)
+
+		for label, itm in plot_atoms.iteritems():
+
+			xs = [atom.X for atom in itm["atoms"]]
+			ys = [atom.Y for atom in itm["atoms"]]
+			zs = [atom.Z for atom in itm["atoms"]]
+
+			ax.scatter(xs, ys, zs=zs, 
+					zdir="z", edgecolors=itm["style"]['edgecolors'], 
+					facecolor=itm["style"]["color"], s=itm["style"]["size"], 
+					marker="o", label=label,
+					picker=True)
+
+			leg["handlers"].append(plt.Circle((0,0), fc=itm["style"]["color"]))
 			leg["labels"].append(label)
 			
 		ax.legend(leg["handlers"], leg["labels"], loc=1)
 
+		fig.canvas.mpl_connect("pick_event", atom_onpick)
+
 		for xs, ys, zs in zip(lines["x"], lines["y"], lines["z"]):
-			ax.plot(xs, ys, zs, c="black", lw=2)
+			ax.plot(xs, ys, zs, c="black", lw=1)
 	
 		ax.set_xlabel("X")
 		ax.set_ylabel("Y")
@@ -359,6 +389,7 @@ class PDBAtom(object):
 		
 
 def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, plot=False, out_dir=None):
+	#import ipdb; ipdb.set_trace()
 
 
 	print "Running rotational permutations on file:  {}".format(pdb_file)
@@ -421,7 +452,7 @@ def iterate_rotations(pdb_file, Rs, il_atom=None, il_parent=None, il_count=0, ou
 		
 		if verbose:
 			print "Rotation Iteration: {}".format(f_name)
-
+	
 		# copy the tree
 		fc = copy.deepcopy(pdb_file)
 		
@@ -437,6 +468,7 @@ def iterate_rotations(pdb_file, Rs, il_atom=None, il_parent=None, il_count=0, ou
 		next_il_atom, next_il_parent = fc.find_next_loop(il_atom, parent=il_parent)
 		if not next_il_atom:
 
+			import ipdb; ipdb.set_trace()
 			# we're done, write the tree to a file and/or plot it
 			fc.write(os.path.join(out_dir, f_name+".pdb"))
 			if plot:
@@ -444,7 +476,10 @@ def iterate_rotations(pdb_file, Rs, il_atom=None, il_parent=None, il_count=0, ou
 
 		else:
 			#il_count += 1
-			iterate_rotations(fc, Rs, il_atom=next_il_atom, il_parent=next_il_parent, il_count=il_count+1, out_dir=out_dir, plot_dir=plot_dir, plot=plot)
+			iterate_rotations(fc, Rs, il_atom=next_il_atom, 
+					il_parent=next_il_parent, il_count=il_count+1, 
+					out_dir=out_dir, plot_dir=plot_dir, plot=plot,
+					verbose=verbose)
 
 def tests():
 	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
