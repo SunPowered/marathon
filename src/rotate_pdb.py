@@ -79,10 +79,11 @@ def rotation_matrices(N=4, verbose=False):
 class PDBfile(object):
 	"""PDB File to read modify and write"""
 
-	def __init__(self, file_name, verbose=False):
+	def __init__(self, file_path, verbose=False):
 		"""Arguments: 
 			file_name:  The file to read"""
-		self.file_name = file_name
+		self.file_path= file_path
+		self.file_name = os.path.split(self.file_path)[1]
 		self.verbose = verbose
 		self.data = []
 		self.atoms = []
@@ -92,6 +93,69 @@ class PDBfile(object):
 	def __str__(self):
 		return str(self.data)
 	
+	def plot_molecule(self, file=None):
+		try:
+			import matplotlib.pyplot as plt
+			from mpl_toolkits.mplot3d import Axes3D
+		except ImportError:
+			print "Cannot import matplotlib"
+			return
+		
+		# plot carbons
+		carbon_atoms = [atom for atom in self.atoms if atom.element=="C"]
+		nitrogen_atoms = [atom for atom in self.atoms if atom.element == "N"]
+		other_atoms = [atom for atom in self.atoms if (atom not in carbon_atoms) or (atom not in nitrogen_atoms)]
+
+		# get axes
+		fig = plt.figure()
+		ax = fig.add_subplot(111, projection="3d")
+
+		carbon = {"colour": "black",
+				"size": 200}
+		nitrogen = {"colour": "red",
+				"size": 120}
+		other = {"colour": "grey",
+				"size":80}
+
+		x = []
+		y = []
+		z = []
+		c = []
+		s = []
+		lines = {"x":[], "y":[], "z":[] }
+
+		for atom in self.atoms:
+			x.append(atom.X)
+			y.append(atom.Y)
+			z.append(atom.Z)
+
+			if atom.element == "C":
+				c.append(carbon["colour"])
+				s.append(carbon["size"])
+			elif atom.element == "N":
+				c.append(nitrogen["colour"])
+				s.append(nitrogen["size"])
+			else:
+				c.append(other["colour"])
+				s.append(other["size"])
+			
+			#for bond_id in atom.bonds:
+			#	b_atom = self.get_atom_by_id(bond_id)
+			#	lines["x"].append([atom.X, b_atom.X])
+			#	lines["y"].append([atom.Y, b_atom.Y])
+			#	lines["z"].append([atom.Z, b_atom.Z])
+
+
+		#ax.plot(lines["x"], lines["y"], zs=lines["z"], lw=2, c="black")
+		ax.plot(x,y,z, lw=2, c="black")
+		ax.scatter(x, y, zs=z, c=c, s=s, marker="o")
+		plt.title("{}".format(self.file_name))
+		#plt.legend(("Carbon", "Nitrogen", "Other"), "upper right")
+		if file is not None:
+			plt.savefig(file, bbox=0.0)
+		else:
+			plt.show()
+
 	def load_atoms(self):
 		if not self.data:
 			if self.verbose:
@@ -196,14 +260,14 @@ class PDBfile(object):
 
 	def read(self):
 			
-		if not os.path.isfile(self.file_name):
-			raise FileError("File {} not found".format(self.file_name))
+		if not os.path.isfile(self.file_path):
+			raise FileError("File {} not found".format(self.file_path))
 		self.data = PDB.PDBFile()
-		self.data.load_file(self.file_name)
+		self.data.load_file(open(self.file_path, 'r'))
 		self.load_atoms()
 		self.internal_loops = self.get_internal_loops()
 		if self.verbose:
-			print "Loaded file {}".format(self.file_name)
+			print "Loaded file {}".format(self.file_path)
 	
 
 	def write(self, file_name):
@@ -308,16 +372,17 @@ def tests():
 	#subtree = test_pdb.get_subtree(first_loop, parent)
 	#pprint(subtree)
 
-	Rs = rotation_matrices(N=4)
-	R = Rs[0]
+	#Rs = rotation_matrices(N=4)
+	#R = Rs[0]
 
-	tt = copy.deepcopy(test_pdb)
-	first_a = tt.atoms[0]
+	#tt = copy.deepcopy(test_pdb)
+	#first_a = tt.atoms[0]
 
-	print first_a
-	first_a.rotate(R)
-	print first_a
+	#print first_a
+	#first_a.rotate(R)
+	#print first_a
 
+	test_pdb.plot_molecule(file='./tmp/test.molecule.pdf')
 
 if __name__ == "__main__":
 	import argparse
@@ -339,7 +404,7 @@ if __name__ == "__main__":
 		
 		print "Running tests"
 		tests()
-		sys.exit(1)
+		sys.exit(0)
 		
 	if args.verbose:
 		print "Verbose enabled"
