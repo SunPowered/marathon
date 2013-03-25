@@ -1,6 +1,49 @@
 #!/usr/bin/env python
 """
-PDB support files gracefully borrored from mmLib <http://pymmlib.sourceforge.net/>
+rotate_pdb.py
+
+A python script to rotate molecules parsed in  Protein Database files (.pdb) 
+format.  A molecule is parsed, the internal loops are calculated, and these
+serve as the rotation joints.  90 degree and 45 degree rotations are 
+available, which rotate the bond at each loop by 90/45 degree increments in 3d, 
+excepting the incoming bond direction.  
+
+
+The script is run from a command prompt through the python interpreter
+
+$>python rotate_pdb.py -f molecule.pdb -o output_dir
+
+
+All options are given by calling the program's help option.
+
+$>python rotate_pdb.py --help
+
+
+The output directory is set with the -o/--output options, expecting a following
+argument of a location to save new .pdb files and optionally rendered strucure
+plots.
+
+Cubic rotations (i.e. 90 deg iterations) are set by default.  Triangular
+rotations (i.e. 45 degree iterations) are set with the -t flag.
+
+The script is capable of plotting the structure of the molecule and the 
+rotations using the -p/--plot flag.  The plots are saved by default in .pdf
+format in a subdirectory of the output director called "plots".
+
+The -i/--interactive flag indicates that all rotation plots should be displayed
+on the screen in an interactive mode, allowing structure exploration and atom
+inspection using a mouse
+
+
+PDB file support gracefully borrored from mmLib <http://pymmlib.sourceforge.net/>
+
+
+--------
+TODO
+-------
+Read some options from settings file
+Avoid bond collisions when combining rotations
+
 """
 import sys
 import os
@@ -14,12 +57,12 @@ except ImportError:
 	sys.exit(1)
 
 import PDB
-#import rotations
 
-__version__ = 0.5
+__version__ = 0.6
 precision = 2 	# Number of decimals to save in float values
-plot_extension = ".pdf"
-figure_size = [10, 10]
+plot_extension = ".pdf" # Default plot extension to use
+figure_size = [10, 10] #Figure size in inches.  Maybe put this in the matplotlibrc file?
+
 
 def Rz(alpha):
 	"""Rotation matrix around the z axis"""
@@ -55,6 +98,7 @@ def rotation_matrices(N=4, verbose=False):
 		print "step: {}".format(step)
 
 	
+	# Its nice to have the no rotation matrix come first
 	matrices = [numpy.identity(3)]
 
 	
@@ -77,12 +121,17 @@ def rotation_matrices(N=4, verbose=False):
 			if verbose:
 				print "Nz: {} / Ny: {}".format(nz,ny)
 
-
 			matrices.append(numpy.dot(Rz(nz*step), Ry(ny*step)))
 	return matrices
 	
-class PDBfile(object):
-	"""PDB File to read modify and write"""
+class PDBMolecule(object):
+	"""PDB molecule data structure.  This holds all information 
+	pertaining to one molecule.  It is capable of reading from a 
+	.pdb file, scanning the molecule for internal loops and 
+	parsing branches from these loops, rotating branches
+	as well as writing the rotated structure back to a file.
+	
+	Can also plot the molecule interactively or to file"""
 
 	def __init__(self, file_path, verbose=False):
 		"""Arguments: 
@@ -99,27 +148,52 @@ class PDBfile(object):
 	def __str__(self):
 		return str(self.data)
 	
-	def plot_molecule(self, file=None):
+	def plot_molecule(self, file=None, title=None):
+		"""Plot the current molecular structure.
+		
+		The coordinates of each atom are placed with
+		approrpriate colouring and size along with
+		all bonds.  
+		
+		If the file argument is provided than save 
+		plot to a file, otherwise plot interactively.
+		
+		Optionally set the title of the plot, defaults
+		to the original .pdb file name"""
+
 		try:
 			import matplotlib.pyplot as plt
 			from mpl_toolkits.mplot3d import Axes3D
 		except ImportError:
 			print "Cannot import matplotlib"
 			return
+		
+		def atom_onpick(event):
+			"""Selection event for atoms.  
+			
+			currently just display the atom info to the console"""
+			lbl = event.artist.get_label()
+			ind = event.ind
+			
+			print
+			print "Atom Selection"
+			pprint(plot_atoms[lbl]["atoms"][ind[0]])
 
+	
+		plot_title = title or self.file_name
+		
 		# get axes
 		fig = plt.figure(1, figsize=figure_size)
 		ax = fig.add_subplot(111, projection="3d")
 
-
-		# plot carbons
+		# Extract the various atoms of interest as well as all the others
 		carbon_atoms = [atom for atom in self.atoms if atom.element=="C"]
 		internal_loops = [atom for atom in self.internal_loops]
 		nitrogen_atoms = [atom for atom in self.atoms if atom.element == "N" and atom not in internal_loops] 
 		other_atoms = [atom for atom in self.atoms if (atom not in carbon_atoms) and (atom not in nitrogen_atoms) and (atom not in internal_loops)]
 
-		lines = {"x":[], "y":[], "z":[] }
 
+		# atom plotting styles
 		default_style = {"color": "k",
 				"size": 50,
 				"edgecolors": 'none'}
@@ -133,7 +207,10 @@ class PDBfile(object):
 		other_style = default_style.copy()
 		other_style.update({"color": 'y'})
 	
-		
+		# structure to store the bond start and end points
+		lines = {"x":[], "y":[], "z":[] }
+
+		# Build the bond lines from the atoms
 		for atom in self.atoms:
 			for bond_id in atom.bonds:
 				b_atom = self.get_atom_by_id(bond_id)
@@ -142,9 +219,6 @@ class PDBfile(object):
 				lines["z"].append([atom.Z, b_atom.Z])
 
 		
-		#ax.plot(lines["x"], lines["y"], zs=lines["z"], lw=2, c="black")
-		#ax.plot(x,y,z, lw=2, c="black")
-
 		leg = {"handlers":[], "labels":[]}
 		plot_atoms = {
 			"Carbon": {"atoms": carbon_atoms,
@@ -156,18 +230,7 @@ class PDBfile(object):
 			"Other": {"atoms": other_atoms, 
 				"style": other_style}}
 
-		def atom_onpick(event):
-			lbl = event.artist.get_label()
-			ind = event.ind
-			
-			print
-			print "Selection"
-			#print "lbl: {} / ind: {}".format(lbl, ind)
-			pprint(plot_atoms[lbl]["atoms"][ind[0]])
-
-			#atom = plot_atoms[lbl]["atoms"][ind[0]]
-			#print "Selected atom: {}".format(atom)
-
+		# add each group of atoms to the plot
 		for label, itm in plot_atoms.iteritems():
 
 			xs = [atom.X for atom in itm["atoms"]]
@@ -182,19 +245,26 @@ class PDBfile(object):
 
 			leg["handlers"].append(plt.Circle((0,0), fc=itm["style"]["color"]))
 			leg["labels"].append(label)
-			
+		
+		# display the legend for the atoms
 		ax.legend(leg["handlers"], leg["labels"], title="Atoms")
 
+		# connect selection event with custom handler
 		fig.canvas.mpl_connect("pick_event", atom_onpick)
 
+		# add the bond lines
 		for xs, ys, zs in zip(lines["x"], lines["y"], lines["z"]):
 			ax.plot(xs, ys, zs, c="black", lw=1)
 	
+		# set the plot axes labels and titles
 		ax.set_xlabel("X")
 		ax.set_ylabel("Y")
 		ax.set_zlabel("Z")
-		plt.title("{}".format(self.file_name))
-		plt.legend(leg["handlers"], leg["labels"], "upper right")
+		plt.title("{}".format(plot_title))
+
+		#plt.legend(leg["handlers"], leg["labels"], "upper right")
+		
+		# save or show?
 		if file is not None:
 			plt.savefig(file, bbox=0.0)
 		else:
@@ -220,7 +290,9 @@ class PDBfile(object):
 				self.add_bond(atom)
 	
 	def get_internal_loops(self):
-		"""Internal loops defined as any element N, surrounded by C's"""
+		"""Internal loops defined as any element N, surrounded by C's
+		
+		Saves the loops to the molecule, does not return anything"""
 		loops = []
 		if self.verbose:
 			print "Looking for internal loops"
@@ -265,6 +337,11 @@ class PDBfile(object):
 
 
 	def get_branches(self):
+		"""Find all branches to this molecule by traversing along
+		splitting at each internal loop
+		
+		Does not return anything"""
+
 		if not self.internal_loops:
 			return
 		if self.verbose:
@@ -345,8 +422,8 @@ class PDBfile(object):
 					a['z'] = atom.Z
 
 
-	def find_end_atoms(self):
-		return [atom for atom in self.atoms if len(atom.bonds)==1]
+	#def find_end_atoms(self):
+	#	return [atom for atom in self.atoms if len(atom.bonds)==1]
 
 
 	def find_first(self):
@@ -357,7 +434,7 @@ class PDBfile(object):
 				return atom
 	
 	def find_next(self, atom, parent=None):
-		
+		"""Find the next atom along the chain"""	
 		for bond in atom.bonds:
 			if parent == bond:
 				continue
@@ -385,6 +462,7 @@ class PDBfile(object):
 		return None, None
 
 	def get_atom_by_id(self, atom_id):
+		"""Search the available atoms to find one named by its id"""
 		r =  [atom for atom in self.atoms if atom.seq_id == atom_id]
 		if len(r) == 0:
 			return None
@@ -417,7 +495,7 @@ class PDBfile(object):
 		[atom.bonds.append(n1) for atom in self.atoms if atom.seq_id == n2]
 
 	def read(self):
-			
+		"""Read a .pdb file"""
 		if not os.path.isfile(self.file_path):
 			raise ValueError("File {} not found".format(self.file_path))
 		self.data = PDB.PDBFile()
@@ -429,6 +507,7 @@ class PDBfile(object):
 	
 
 	def write(self, file_name):
+		"""write current molecule to a .pdb file"""
 		self.update_data()
 		if self.verbose:
 			print "Writing to file {}".format(file_name)
@@ -513,12 +592,22 @@ def rotation_matrix(axis,theta):
 
 def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, plot=False, out_dir=None, interactive=False):
 
+	"""The main function to process files.
+	
+	This takes a single pdb file and performs the necessary rotations on each
+	internal loop.  All combinations are saved to a file and optionally plotted
+	
+	The rotation type is specified with the 'rotation' argument.
+	verbose=True spits out more information to the console
+	plot=True plots each rotation iteration
+	out_dir specify the output directory to save files
+	interactive=True Dont save plots but direct them to the display"""
 
 	print "Running rotational permutations on file:  {}".format(pdb_file)
 	
 	# Read file and find internal loops
 
-	pdb_orig = PDBfile(pdb_file, verbose=verbose)
+	pdb_orig = PDBMolecule(pdb_file, verbose=verbose)
 
 	base_name = os.path.splitext(pdb_orig.file_name)[0]
 
@@ -556,7 +645,7 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 	for rot_perm in rot_perms:
 		f = copy.deepcopy(pdb_orig)
 		rot_name = "_".join(["I{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
-		file_name = base_name + rot_name
+		file_name = base_name + "_" + rot_name
 		if verbose:
 			print "Rotation {}".format(rot_name)
 		
@@ -571,7 +660,7 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 				plot_file = None
 			else:
 				plot_file = os.path.join(plot_out_dir, file_name + plot_extension)
-			f.plot_molecule(file=plot_file)
+			f.plot_molecule(file=plot_file, title=file_name)
 		del f
 
 	if verbose:
@@ -579,40 +668,14 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 
 
 def tests():
+	"""Change this as you need to test certain features"""
 	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 	test_file = os.path.join(basedir, "data", "initialGraphs", "1B36_A_Graph.pdb")
 	#test_file = os.path.join(basedir, "data", "initialGraphs", "1GID_A_Graph.pdb")
-	print "Using file {}".format(test_file)	
-	#test_pdb = PDBfile(test_file, verbose=True)
+	#print "Using file {}".format(test_file)	
+	#test_pdb = PDBMolecule(test_file, verbose=True)
 	#pprint(test_pdb.atoms)
-	
-	#print test_pdb
-	#test_pdb.internal_loops
-	#rots = rotation_matrices(N=4, verbose=True)
-	#pprint(len(rots))
-	#pprint(rots)
-	#rotation = "cubic"
 
-	#test_pdb.write(os.path.join(basedir, "tmp", "test.pdb"))
-	
-	#first_loop = test_pdb.internal_loops[0]
-	
-	#parent = test_pdb.get_atom_by_id(first_loop.bonds[1])
-	#print first_loop
-	#print parent
-	#subtree = test_pdb.get_subtree(first_loop, parent)
-	#pprint(subtree)
-
-	Rs = rotation_matrices(N=4, verbose=True)
-	pprint(Rs)
-	#R = Rs[0]
-
-	#tt = copy.deepcopy(test_pdb)
-	#first_a = tt.atoms[0]
-
-	#print first_a
-	#first_a.rotate(R)
-	#print first_a
 
 	#test_pdb.plot_molecule(file='./tmp/test.molecule.pdf')
 	#test_pdb.plot_molecule()
@@ -622,8 +685,7 @@ def tests():
 		os.system("rm -R {}".format(out_dir))
 		os.makedirs(out_dir)
 
-
-	rotation_permutations_from_file(test_file, rotation="triangular", verbose=True, out_dir=out_dir,  plot=True, interactive=True)
+	rotation_permutations_from_file(test_file, rotation="cubic", verbose=True, out_dir=out_dir,  plot=True, interactive=True)
 
 if __name__ == "__main__":
 	import argparse
@@ -691,6 +753,6 @@ if __name__ == "__main__":
 		rotation_permutations_from_file(f, rotation=rotation_method, verbose=args.verbose, plot=args.plot, out_dir=args.output, interactive=args.interactive)
 		#print "Running rotational permutations on file: {}".format(args.file)
 			
-	print "All.  Have a nice day"
+	print "All Done.  Have a nice day"
 
 
