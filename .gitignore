@@ -38,3 +38,5 @@ nosetests.xml
 tmp
 
 matplotlibrc
+data
+release
