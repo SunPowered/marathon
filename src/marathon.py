@@ -61,10 +61,16 @@ except ImportError:
 import PDB
 
 __version__ = 0.8
+
+###############################################################
+Program Options
+##############################################################
 precision = 3 	# Number of decimals to save in float values
 plot_extension = ".pdf" # Default plot extension to use
 figure_size = [10, 10] #Figure size in inches.  Maybe put this in the matplotlibrc file?
 sep="-"
+##############################################################
+
 class BondInterferenceError(Exception):
 	pass
 
