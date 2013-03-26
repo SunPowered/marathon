@@ -16,6 +16,7 @@ if os.path.isdir(output_directory):
 	# remove this directory
 	shutil.rmtree(output_directory)
 
-os.system("python {} -f {} -o {}".format(marathon_script, single_data_file, output_directory))
+os.system("python {} -f {} -o {} -t -v -i".format(marathon_script, single_data_file, output_directory))
+ 
 
 

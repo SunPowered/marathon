@@ -48,6 +48,8 @@ Avoid bond collisions when combining rotations
 import sys
 import os
 import copy
+import shutil
+
 from pprint import pprint
 
 try:
@@ -58,24 +60,26 @@ except ImportError:
 
 import PDB
 
-__version__ = 0.7
-precision = 2 	# Number of decimals to save in float values
+__version__ = 0.8
+precision = 3 	# Number of decimals to save in float values
 plot_extension = ".pdf" # Default plot extension to use
 figure_size = [10, 10] #Figure size in inches.  Maybe put this in the matplotlibrc file?
-
+sep="-"
+class BondInterferenceError(Exception):
+	pass
 
 def Rz(alpha):
 	"""Rotation matrix around the z axis"""
 
-	cosa = numpy.cos(alpha)
-	sina = numpy.sin(alpha)
+	cosa = numpy.around(numpy.cos(alpha),2*precision)
+	sina = numpy.around(numpy.sin(alpha), 2*precision)
 
 	return numpy.array([[cosa, -sina, 0], [sina, cosa, 0],[0, 0, 1]])
 
 def Ry(alpha):
 	"""Rotation matrix around the y axis"""
-	cosa = numpy.cos(alpha)
-	sina = numpy.sin(alpha)
+	cosa = numpy.around(numpy.cos(alpha), 2*precision)
+	sina = numpy.around(numpy.sin(alpha), 2*precision)
 
 	return numpy.array([[cosa, 0, -sina], [0, 1, 0], [sina, 0, cosa]])
 
@@ -269,6 +273,8 @@ class PDBMolecule(object):
 			plt.savefig(file, bbox=0.0)
 		else:
 			plt.show()
+		plt.clf()
+		plt.close()
 
 	def load_atoms(self):
 		if not self.data:
@@ -306,7 +312,6 @@ class PDBMolecule(object):
 				continue
 
 			is_IL = True
-
 			for bond in bonds:
 				for a in self.atoms:
 					if a.seq_id == bond:
@@ -316,28 +321,40 @@ class PDBMolecule(object):
 
 			if is_IL:
 				self.internal_loops.append(atom)
+				[self.branches.append([atom, bond]) for bond in atom.bonds]
+				#self.add_branches_from_loop(atom)
 
 		if self.verbose:
-			print "Found {} internal loops".format(len(loops))
+			print "Found {} internal loops and {} branches".format(len(self.internal_loops), len(self.branches))
 			#pprint(loops)
 
-		self.get_branches()
+		#self.get_branches()
 
-	def add_branch_from_atom(self, atom, parent):
+	def add_branches_from_loop(loop_atom):
+		"""delete me"""
+		for bond in loop_atom.bonds:
+			self.branches.append(loop_atom, self.get_atom_by_id(bond))
+
+	def add_branch_from_atom(self, atom, bonded_atom):
+		"""delete me 
+		A branch is defined with an internal loop atom and a 
+		bonded atom"""
 		if atom in self.internal_loops:
 			# create new branches
 			# a branch is acomposed of an internal loop id and a neighbour id
 
 			for bond in atom.bonds:
-				if bond == parent:
-					continue
+				#if bond == parent:
+				#	continue
 				if self.verbose:
 					print "Found a branch at {}, connected to {}".format(atom.seq_id, bond)
 				self.branches.append([atom.seq_id, bond])
 
 
 	def get_branches(self):
-		"""Find all branches to this molecule by traversing along
+		"""delete me
+
+		Find all branches to this molecule by traversing along
 		splitting at each internal loop
 		
 		Does not return anything"""
@@ -365,19 +382,41 @@ class PDBMolecule(object):
 		
 		
 
-	def rotate_branch(self, branch, R):
-		"""Rotates a branch by a specified rotation matrix"""
+	def rotate_branch(self, branch_id, R):
+		"""Rotates a branch by a specified rotation matrix. The 
+		branch is given as a loop_atom and a bond_atom pair"""
+		
+		
 		# Get the branch
-		branch = self.branches[branch]
+		branch = self.branches[branch_id]
 		
-		loop_atom = self.get_atom_by_id(branch[0])
-		loop_child = self.get_atom_by_id(branch[1])
+		loop_atom = branch[0]
+		branch_atom = self.get_atom_by_id(branch[1])
 		
-		rotation_axis = loop_child.coordinates - loop_atom.coordinates
-		
-		# Get the subtree
-		st = self.get_subtree(loop_atom, loop_child)
+		rotation_axis = branch_atom.coordinates - loop_atom.coordinates
+		# normalize rotation_axis
+		rotation_axis = rotation_axis / numpy.sqrt(numpy.dot(rotation_axis, rotation_axis))
 
+		# Check that the rotation of the bond axis does not collide with an existing bond
+
+		rotated_axis = numpy.around(numpy.dot(R, rotation_axis), precision)
+
+
+		for bond in loop_atom.bonds:
+			# Ignore itself
+			if bond == branch_atom.seq_id:
+				continue
+			bond_axis = self.get_atom_by_id(bond).coordinates - loop_atom.coordinates
+			bond_axis = bond_axis / numpy.sqrt(numpy.dot(bond_axis, bond_axis))
+			bond_axis = numpy.around(bond_axis, precision)
+			if numpy.allclose(numpy.dot(bond_axis, rotated_axis), 1):
+				# Parallel vectors
+				raise BondInterferenceError("Rotation of branch {} will collide with bond {}".format(branch_id, bond))
+
+		# If no collision, continue with the rotation
+		# Get the subtree
+		st = self.get_subtree(loop_atom, branch_atom)
+		
 		# Rotate all atoms of all sub branches
 		for atom in st:
 			atom.rotate(R, loop_atom.coordinates, rotation_axis)
@@ -631,37 +670,56 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 	else:
 		Rs = rotation_matrices(N=4)
 
-	from itertools import permutations, combinations_with_replacement
+	from itertools import product, permutations
+
+	
 
 	# For all unique branches from internal loops
 	# Compute permutations with the R rotation matrices at loop
 	branches = pdb_orig.branches
 	if verbose:
-		print "A total of {} branches to permute".format(len(branches))
+		print "A total of {} loops and {} branches to permute around".format(len(pdb_orig.internal_loops), len(branches))
 	
 	# returns all branch rotation permutations
 	#rot_perms = permutations(xrange(len(Rs)), len(branches))
-	rot_perms = combinations_with_replacement(xrange(len(Rs)), len(branches))
-	for rot_perm in rot_perms:
-		f = copy.deepcopy(pdb_orig)
-		rot_name = "_".join(["I{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
-		file_name = base_name + "_" + rot_name
-		if verbose:
-			print "Rotation {}".format(rot_name)
+	#rot_perms = combinations_with_replacement(xrange(len(Rs)), len(branches))
+	
+	#For each internal node, get the rotation permutations
+	perms_storage = []
+	rot_perms = product(xrange(len(Rs)), repeat=len(branches))
 		
-		for N, R in enumerate(rot_perm):
-			# Apply rotation R to internal loop branch N
-			f.rotate_branch(N, Rs[R])
+	# now find all combinations of the these loop rotations over the molecule
+	
+	for rot_perm in rot_perms:
 
-		# write the file and plot it
-		f.write(os.path.join(file_out_dir, file_name+".pdb"))
-		if plot:
-			if interactive:
-				plot_file = None
-			else:
-				plot_file = os.path.join(plot_out_dir, file_name + plot_extension)
-			f.plot_molecule(file=plot_file, title=file_name)
-		del f
+		#import ipdb; ipdb.set_trace()
+		f = copy.deepcopy(pdb_orig)
+		try:
+			rot_name = sep.join(["B{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
+			#if rot_name == "B0R3_B1R3":
+			#	import ipdb; ipdb.set_trace()
+			file_name = base_name + sep + rot_name
+			if verbose:
+				print "Rotation {}".format(rot_name)
+
+			for N, R in enumerate(rot_perm):
+				# Apply rotation R to internal loop branch N
+				f.rotate_branch(N, Rs[R])
+		except BondInterferenceError:
+			if verbose:
+				print "Bond Interference detected.  Ignoring rotation"
+		else:
+
+			# write the file and plot it
+			f.write(os.path.join(file_out_dir, file_name+".pdb"))
+			if plot:
+				if interactive:
+					plot_file = None
+				else:
+					plot_file = os.path.join(plot_out_dir, file_name + plot_extension)
+				f.plot_molecule(file=plot_file, title=file_name)
+		finally:
+			del f
 
 	if verbose:
 		print "Completed permutations on file {}".format(pdb_file)	
@@ -670,7 +728,7 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 def tests():
 	"""Change this as you need to test certain features"""
 	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-	test_file = os.path.join(basedir, "data", "initialGraphs", "1B36_A_Graph.pdb")
+	test_file = os.path.join(basedir, "test", "initialGraphs", "1B36_A_Graph.pdb")
 	#test_file = os.path.join(basedir, "data", "initialGraphs", "1GID_A_Graph.pdb")
 	#print "Using file {}".format(test_file)	
 	#test_pdb = PDBMolecule(test_file, verbose=True)
@@ -682,7 +740,7 @@ def tests():
 
 	out_dir = "tmp/out"
 	if os.path.isdir(out_dir):
-		os.system("rm -R {}".format(out_dir))
+		shutil.rmtree(out_dir)
 		os.makedirs(out_dir)
 
 	rotation_permutations_from_file(test_file, rotation="cubic", verbose=True, out_dir=out_dir,  plot=True, interactive=True)
@@ -739,11 +797,12 @@ if __name__ == "__main__":
 		print "Scanning directory {} for .pdb files".format(args.directory)
 
 		for f in os.listdir(args.directory):
+			
+			# Run permutations on files in the directory
 			pdb_file = 	os.path.join(args.directory, f)
 			rotation_permutations_from_file(pdb_file, rotation=rotation_method, verbose=args.verbose, plot=args.plot, out_dir=args.output, interactive=args.interactive)
 
 
-			# Run perms on file
 
 	elif args.file:
 		if not os.path.isfile(args.file):
