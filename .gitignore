@@ -40,3 +40,4 @@ tmp
 matplotlibrc
 data
 release
+test/output

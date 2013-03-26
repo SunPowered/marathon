@@ -1,10 +1,12 @@
+.PHONY: all test clean
+
 OUT_DIR=tmp/out
 SCRIPT=src/marathon.py
+TEST_SCRIPT=test/test_marathon.py
 
 remove:
 	rm -Rf $(OUT_DIR)
 
-test: remove
-	$(SCRIPT) -d data/initialGraphs -o $(OUT_DIR) -p -v	
-
+test: 
+	python $(TEST_SCRIPT)
 
