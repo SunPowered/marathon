@@ -25,7 +25,7 @@ The program is run from the command line using python 2.7.  It takes the followi
 
 ## Examples
 
-`rotate_pdb.py --output myoutputdir --file mydatafile.pdb -c -p -v`
+`marathon.py --output myoutputdir --file mydatafile.pdb -c -p -v`
 	
 will output all rotational permuatations of `mydatafile.pdb` to `myoutputdir`
 
@@ -38,7 +38,7 @@ The following packages must be installed in the python path:
 
 # Help
 
-Run `rotate_pdb.py --help` to get a list of available options
+Run `marathon.py --help` to get a list of available options
 
 # Author
 
