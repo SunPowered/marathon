@@ -63,7 +63,7 @@ import PDB
 __version__ = 0.8
 
 ###############################################################
-Program Options
+# Program Options
 ##############################################################
 precision = 3 	# Number of decimals to save in float values
 plot_extension = ".pdf" # Default plot extension to use
@@ -596,7 +596,6 @@ class PDBAtom(object):
 
 		# Normalize direction
 		direction = direction / numpy.sqrt(numpy.dot(direction, direction))
-
 		rc = self.coordinates - point
 		# Normalize 
 		rc_norm = rc/numpy.sqrt(numpy.dot(rc, rc))
@@ -606,6 +605,8 @@ class PDBAtom(object):
 		# Coordinates must be rotated to be in line with the parent
 		# This rotation is along the vector perpendicular to both rc and direction
 		rot_unit = numpy.cross(rc_norm, direction)
+		dot = numpy.dot(rc_norm, direction)
+		
 		rot_theta = numpy.arccos(numpy.dot(rc_norm, direction))
 		rot_R = rotation_matrix(direction, rot_theta)
 		rc = numpy.dot(rot_R, rc)
@@ -784,7 +785,7 @@ if __name__ == "__main__":
 	if not os.path.isdir(args.output):
 		if args.verbose:
 			print "Creating {}".format(args.output)
-		os.mkdir(args.output)
+		os.makedirs(args.output)
 
 	rotation_method = "cubic"
 	if args.triangular:
