@@ -60,7 +60,7 @@ except ImportError:
 
 import PDB
 
-__version__ = 0.8
+__version__ = "0.8.1"
 
 ###############################################################
 # Program Options
@@ -597,8 +597,14 @@ class PDBAtom(object):
 		# Normalize direction
 		direction = direction / numpy.sqrt(numpy.dot(direction, direction))
 		rc = self.coordinates - point
+		rc_mag = numpy.dot(rc, rc)
+		if numpy.allclose(rc_mag, 0):
+			if verbose:
+				print "rotation around self detected"
+				return
+				
 		# Normalize 
-		rc_norm = rc/numpy.sqrt(numpy.dot(rc, rc))
+		rc_norm = rc/numpy.sqrt(rc_mag)
 		
 
 
@@ -696,18 +702,17 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 	rot_perms = product(xrange(len(Rs)), repeat=len(branches))
 		
 	# now find all combinations of the these loop rotations over the molecule
-	
+	perm_count = 1	
 	for rot_perm in rot_perms:
 
 		#import ipdb; ipdb.set_trace()
 		f = copy.deepcopy(pdb_orig)
 		try:
-			rot_name = sep.join(["B{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
+			#rot_name = sep.join(["B{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
 			#if rot_name == "B0R3_B1R3":
 			#	import ipdb; ipdb.set_trace()
-			file_name = base_name + sep + rot_name
-			if verbose:
-				print "Rotation {}".format(rot_name)
+			#file_name = base_name + sep + rot_name
+			file_name = str(perm_count) + sep + base_name
 
 			for N, R in enumerate(rot_perm):
 				# Apply rotation R to internal loop branch N
@@ -725,6 +730,7 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 				else:
 					plot_file = os.path.join(plot_out_dir, file_name + plot_extension)
 				f.plot_molecule(file=plot_file, title=file_name)
+			perm_count += 1
 		finally:
 			del f
 
@@ -763,18 +769,12 @@ if __name__ == "__main__":
 	parser.add_argument("-t", "--triangular", help="Roatate around a triangular structure, i.e. 45 deg", action="store_true")
 	parser.add_argument("-p", "--plot", help="Plot the rotated molecules in a `plots` subfolder", default=False, action="store_true")
 	parser.add_argument("-i", "--interactive", help="Plot figures interactively", action="store_true")
-	parser.add_argument("--test", help="Run the testing script and exit", action="store_true", default=False)
 	args = parser.parse_args()
 
 	print
 	print "Permuting Rotations v{}".format(__version__)
 	print 
 	
-	if args.test:
-		
-		print "Running tests"
-		tests()
-		sys.exit(0)
 		
 	if args.verbose:
 		print "Verbose enabled"
@@ -820,5 +820,3 @@ if __name__ == "__main__":
 		#print "Running rotational permutations on file: {}".format(args.file)
 			
 	print "All Done.  Have a nice day"
-
-
