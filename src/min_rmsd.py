@@ -27,7 +27,7 @@ if __name__ == "__main__":
 	print "Finding the minimum RMSD for file {}".format(args.file)
 
 	min_rmsd = 999999999999999
-	min_rmsd_counter = 0
+	min_rmsd_counter = []
 
 	f = open(args.file, 'r')
 
@@ -46,10 +46,12 @@ if __name__ == "__main__":
 			if args.verbose:
 				print "Found new RMSD min {} at line {}".format(cur_rmsd, line_counter)
 			min_rmsd = cur_rmsd
-			min_rmsd_counter = cur_iter
+			min_rmsd_counter = [cur_iter]
+		elif cur_rmsd == min_rmsd:
+			min_rmsd_counter.append(cur_iter)
 
 
 	print
-	print "Minimum rmsd of {} at iteration {}".format(min_rmsd, min_rmsd_counter)
+	print "Minimum rmsd of {} at iteration(s) {}".format(min_rmsd, min_rmsd_counter)
 	print "All done.  Have a nice day"
 		
