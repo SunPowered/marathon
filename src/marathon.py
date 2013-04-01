@@ -11,7 +11,7 @@ excepting the incoming bond direction.
 
 The script is run from a command prompt through the python interpreter
 
-$>python marathon -f molecule.pdb -o output_dir
+$>python marathon -o output_dir molecule.pdb 
 
 
 All options are given by calling the program's help option.
@@ -42,9 +42,8 @@ PDB file support gracefully borrored from mmLib <http://pymmlib.sourceforge.net/
 TODO
 -------
 Read some options from settings file
-Avoid bond collisions when combining rotations
-
 """
+
 import sys
 import os
 import copy
@@ -60,7 +59,7 @@ except ImportError:
 
 import PDB
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"
 
 ###############################################################
 # Program Options
@@ -91,7 +90,7 @@ def Ry(alpha):
 
 
 def rotation_matrices(N=4, verbose=False):
-	"""Split the circle into N equal sections and permute rotatations around
+	"""Split a unit circle into N equal sections and permute rotatations around
 	the Y and Z axis this many times.  I.e. cubic rotations, N=4.  Triangular 
 	rotations, N=8.  Ignore the case when the rotation angle is [pi/2, 0]
 	
@@ -108,7 +107,7 @@ def rotation_matrices(N=4, verbose=False):
 		print "step: {}".format(step)
 
 	
-	# Its nice to have the no rotation matrix come first
+	# Its nice to have the identity  matrix come first
 	matrices = [numpy.identity(3)]
 
 	
@@ -145,7 +144,8 @@ class PDBMolecule(object):
 
 	def __init__(self, file_path, verbose=False):
 		"""Arguments: 
-			file_name:  The file to read"""
+			file_name:  The file to read
+			verbose: 	A boolean to print more detailed info to the console"""
 		self.file_path= file_path
 		self.file_name = os.path.split(self.file_path)[1]
 		self.verbose = verbose
@@ -177,7 +177,7 @@ class PDBMolecule(object):
 		except ImportError:
 			print "Cannot import matplotlib"
 			return
-		
+
 		def atom_onpick(event):
 			"""Selection event for atoms.  
 			
@@ -283,11 +283,14 @@ class PDBMolecule(object):
 		plt.close()
 
 	def load_atoms(self):
+		"""Take atoms read from the PDB module and extract relevant info for our needs"""
 		if not self.data:
 			if self.verbose:
-				print "Loading atoms for empty data"
-
+				print "No data found for the molecule"
 			return
+
+		# Quick and dirty way of extracting the atoms 
+		# and bonds in the molecule
 
 		for atom in self.data:
 			if "element" in atom:
@@ -333,9 +336,7 @@ class PDBMolecule(object):
 		if self.verbose:
 			print "Found {} internal loops and {} branches".format(len(self.internal_loops), len(self.branches))
 			#pprint(loops)
-
-		#self.get_branches()
-
+	'''
 	def add_branches_from_loop(loop_atom):
 		"""delete me"""
 		for bond in loop_atom.bonds:
@@ -355,7 +356,6 @@ class PDBMolecule(object):
 				if self.verbose:
 					print "Found a branch at {}, connected to {}".format(atom.seq_id, bond)
 				self.branches.append([atom.seq_id, bond])
-
 
 	def get_branches(self):
 		"""delete me
@@ -386,7 +386,7 @@ class PDBMolecule(object):
 			else:
 				self.add_branch_from_atom(curr_atom, prev_atom.seq_id)
 		
-		
+	'''
 
 	def rotate_branch(self, branch_id, R):
 		"""Rotates a branch by a specified rotation matrix. The 
@@ -761,10 +761,11 @@ def tests():
 if __name__ == "__main__":
 	import argparse
 	parser = argparse.ArgumentParser(description="Program to parse a PDB file, identify isolation loops, and permute molecular rotations around those loops and write back to a set of PDB files")
+	parser.add_argument("args", help="One or more filenames or directories", nargs="+")
 	parser.add_argument("-v", "--verbose", help="Print details to console", action="store_true")
-	parser.add_argument("-d", "--directory", help="Parse all PDB files in this directory", action="store")
+#	parser.add_argument("-d", "--directory", help="Parse all PDB files in this directory", action="store")
 	parser.add_argument("-o", "--output", help="Output new PDB files to this directory", default=os.getcwd(), action="store")
-	parser.add_argument("-f", "--file", help="Single PDB file to process", action="store")
+#	parser.add_argument("-f", "--file", help="Single PDB file to process", action="store")
 	parser.add_argument("-c", "--cubic", help="Rotate around a cubic structure, i.e. 90 deg", action="store_true")
 	parser.add_argument("-t", "--triangular", help="Roatate around a triangular structure, i.e. 45 deg", action="store_true")
 	parser.add_argument("-p", "--plot", help="Plot the rotated molecules in a `plots` subfolder", default=False, action="store_true")
@@ -779,7 +780,7 @@ if __name__ == "__main__":
 	if args.verbose:
 		print "Verbose enabled"
 
-		print "Arguments received: {}".format( args)
+		#print "Arguments received: {}".format( args)
 
 	print "Saving output files to directory {}".format(args.output)	
 	if not os.path.isdir(args.output):
@@ -795,28 +796,34 @@ if __name__ == "__main__":
 
 	if args.interactive:
 		args.plot = True
-
-	if args.directory:
-		if not os.path.isdir(args.directory):
-			print "Uh oh, the directory {} does not exist. Exiting".format(args.directory)
-			sys.exit(1)
-
-		print "Scanning directory {} for .pdb files".format(args.directory)
-
-		for f in os.listdir(args.directory):
+	
+	# Check the positional arguments
+	if args.args:
+		for arg in args.args:
+			import ipdb; ipdb.set_trace()
+			if os.path.isfile(arg):
 			
-			# Run permutations on files in the directory
-			pdb_file = 	os.path.join(args.directory, f)
-			rotation_permutations_from_file(pdb_file, rotation=rotation_method, verbose=args.verbose, plot=args.plot, out_dir=args.output, interactive=args.interactive)
+				rotation_permutations_from_file(arg, 
+						rotation=rotation_method, 
+						verbose=args.verbose, 
+						plot=args.plot, 
+						out_dir=args.output, 
+						interactive=args.interactive)
 
-
-
-	elif args.file:
-		if not os.path.isfile(args.file):
-			print "File {} does not exist. Exiting"
-			sys.exit(1)
-		
-		rotation_permutations_from_file(args.file, rotation=rotation_method, verbose=args.verbose, plot=args.plot, out_dir=args.output, interactive=args.interactive)
-		#print "Running rotational permutations on file: {}".format(args.file)
+			elif os.path.isdir(arg):
+				# Its a directory, permute each file individually
+				for f in os.listdir(arg):
 			
+					# Run permutations on files in the directory
+					pdb_file = 	os.path.join(arg, f)
+					rotation_permutations_from_file(pdb_file, 
+							rotation=rotation_method, 
+							verbose=args.verbose, 
+							plot=args.plot, 
+							out_dir=args.output, 
+							interactive=args.interactive)
+
+			else:
+				print "Unknown argument: {}.  Skipping.".format(arg)
 	print "All Done.  Have a nice day"
+	
