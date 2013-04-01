@@ -12,7 +12,7 @@ test_data_directory = os.path.join(base_dir, 'testGraphs')
 filename = "1B36_A_Graph.pdb"
 
 #filename = "1GID_A_Graph.pdb"
-#single_data_file = os.path.join(test_data_directory, filename)
+single_data_file = os.path.join(test_data_directory, filename)
 
 output_directory = os.path.join(base_dir, "output")
 
@@ -20,7 +20,9 @@ if os.path.isdir(output_directory):
 	# remove this directory
 	shutil.rmtree(output_directory)
 
-os.system("python {} -o {} -v -p {}".format(marathon_script, output_directory, test_data_directory))
+data_args = single_data_file
+#data_args = test_data_directory
+os.system("python {} -o {} -r -v -p {}".format(marathon_script, output_directory, data_args))
  
 
 

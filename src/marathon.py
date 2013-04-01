@@ -3,7 +3,7 @@
 marathon.py
 
 A python script to rotate molecules parsed in  Protein Database files (.pdb) 
-format.  A molecule is parsed, the internal loops are calculated, and these
+format.  A molecule is parsed, the flexible points are calculated, and these
 serve as the rotation joints.  90 degree and 45 degree rotations are 
 available, which rotate the bond at each loop by 90/45 degree increments in 3d, 
 excepting the incoming bond direction.  
@@ -68,6 +68,7 @@ precision = 3 	# Number of decimals to save in float values
 plot_extension = ".pdf" # Default plot extension to use
 figure_size = [10, 10] #Figure size in inches.  Maybe put this in the matplotlibrc file?
 sep="-"
+rmsd_fname = "rmsd.txt"
 ##############################################################
 
 class BondInterferenceError(Exception):
@@ -136,7 +137,7 @@ def rotation_matrices(N=4, verbose=False):
 class PDBMolecule(object):
 	"""PDB molecule data structure.  This holds all information 
 	pertaining to one molecule.  It is capable of reading from a 
-	.pdb file, scanning the molecule for internal loops and 
+	.pdb file, scanning the molecule for flexible points and 
 	parsing branches from these loops, rotating branches
 	as well as writing the rotated structure back to a file.
 	
@@ -151,7 +152,7 @@ class PDBMolecule(object):
 		self.verbose = verbose
 		self.data = []
 		self.atoms = []
-		self.internal_loops = []
+		self.flexible_points = []
 		self.branches = []
 		self.read()
 
@@ -198,9 +199,9 @@ class PDBMolecule(object):
 
 		# Extract the various atoms of interest as well as all the others
 		carbon_atoms = [atom for atom in self.atoms if atom.element=="C"]
-		internal_loops = [atom for atom in self.internal_loops]
-		nitrogen_atoms = [atom for atom in self.atoms if atom.element == "N" and atom not in internal_loops] 
-		other_atoms = [atom for atom in self.atoms if (atom not in carbon_atoms) and (atom not in nitrogen_atoms) and (atom not in internal_loops)]
+		flexible_points = [atom for atom in self.flexible_points]
+		nitrogen_atoms = [atom for atom in self.atoms if atom.element == "N" and atom not in flexible_points] 
+		other_atoms = [atom for atom in self.atoms if (atom not in carbon_atoms) and (atom not in nitrogen_atoms) and (atom not in flexible_points)]
 
 
 		# atom plotting styles
@@ -235,7 +236,7 @@ class PDBMolecule(object):
 				"style" : carbon_style},
 			"Nitrogen": {"atoms": nitrogen_atoms,
 				"style": nitrogen_style},
-			"Internal Loop": {"atoms": internal_loops,
+			"Internal Loop": {"atoms": flexible_points,
 				"style": il_style},
 			"Other": {"atoms": other_atoms, 
 				"style": other_style}}
@@ -304,13 +305,13 @@ class PDBMolecule(object):
 					print "Found bond: {}".format(atom)
 				self.add_bond(atom)
 	
-	def get_internal_loops(self):
-		"""Internal loops defined as any element N, surrounded by C's
+	def get_flexible_points(self):
+		"""Flexible points defined as any element N, surrounded by C's
 		
-		Saves the loops to the molecule, does not return anything"""
+		Saves the flexible points to the molecule, does not return anything"""
 		loops = []
 		if self.verbose:
-			print "Looking for internal loops"
+			print "Looking for flexible points"
 
 		for atom in self.atoms:
 			if atom.element != "N":
@@ -329,12 +330,12 @@ class PDBMolecule(object):
 							break
 
 			if is_IL:
-				self.internal_loops.append(atom)
+				self.flexible_points.append(atom)
 				[self.branches.append([atom, bond]) for bond in atom.bonds]
 				#self.add_branches_from_loop(atom)
 
 		if self.verbose:
-			print "Found {} internal loops and {} branches".format(len(self.internal_loops), len(self.branches))
+			print "Found {} flexible points and {} branches".format(len(self.flexible_points), len(self.branches))
 			#pprint(loops)
 	'''
 	def add_branches_from_loop(loop_atom):
@@ -344,11 +345,11 @@ class PDBMolecule(object):
 
 	def add_branch_from_atom(self, atom, bonded_atom):
 		"""delete me 
-		A branch is defined with an internal loop atom and a 
+		A branch is defined with an flexible point atom and a 
 		bonded atom"""
-		if atom in self.internal_loops:
+		if atom in self.flexible_points:
 			# create new branches
-			# a branch is acomposed of an internal loop id and a neighbour id
+			# a branch is acomposed of an flexible point id and a neighbour id
 
 			for bond in atom.bonds:
 				#if bond == parent:
@@ -361,16 +362,16 @@ class PDBMolecule(object):
 		"""delete me
 
 		Find all branches to this molecule by traversing along
-		splitting at each internal loop
+		splitting at each flexible point
 		
 		Does not return anything"""
 
-		if not self.internal_loops:
+		if not self.flexible_points:
 			return
 		if self.verbose:
 			print "Computing branches"
 		# Start at an end node
-		# Traverse until internal loop
+		# Traverse until flexible point
 		
 		prev_atom = self.find_first()
 		curr_atom = self.find_next(prev_atom)
@@ -493,13 +494,13 @@ class PDBMolecule(object):
 
 
 	def find_next_loop(self, atom, parent=None):
-		"""skip through the molecule bonds until an internal loop is found"""
+		"""skip through the molecule bonds until a flexible point  is found"""
 		for bond_id in atom.bonds:
 			if parent and parent == bond_id:
 				continue
 			bond = self.get_atom_by_id(bond_id)
 
-			if bond in self.internal_loops:
+			if bond in self.flexible_points:
 				return bond, atom.seq_id
 
 			return self.find_next_loop(bond, parent=atom.seq_id)
@@ -546,7 +547,7 @@ class PDBMolecule(object):
 		self.data = PDB.PDBFile()
 		self.data.load_file(open(self.file_path, 'r'))
 		self.load_atoms()
-		self.get_internal_loops()
+		self.get_flexible_points()
 		if self.verbose:
 			print "Loaded file {}".format(self.file_path)
 	
@@ -558,6 +559,14 @@ class PDBMolecule(object):
 			print "Writing to file {}".format(file_name)
 
 		self.data.save_file(open(file_name, 'w'))
+
+	@property
+	def rmsd(self):
+		"""Calculates RMSD of molecule.
+		
+		The square root of the mean of the square of the distance between 
+		all atoms i, j where i != j in the molecule"""
+		return  numpy.sqrt(numpy.mean([(atom.coordinates - atom_p.coordinates)**2 for atom in self.atoms for atom_p in self.atoms if atom_p != atom ]))
 
 
 class PDBAtom(object):
@@ -642,12 +651,13 @@ def rotation_matrix(axis,theta):
                       [2*(b*d-a*c), 2*(c*d+a*b), a*a+d*d-b*b-c*c]])
 		
 
-def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, plot=False, out_dir=None, interactive=False):
+def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, 
+		plot=False, out_dir=None, interactive=False, rmsd=False):
 
 	"""The main function to process files.
 	
 	This takes a single pdb file and performs the necessary rotations on each
-	internal loop.  All combinations are saved to a file and optionally plotted
+	flexible point.  All combinations are saved to a file and optionally plotted
 	
 	The rotation type is specified with the 'rotation' argument.
 	verbose=True spits out more information to the console
@@ -657,7 +667,7 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 
 	print "Running rotational permutations on file:  {}".format(pdb_file)
 	
-	# Read file and find internal loops
+	# Read file and find flexible points
 
 	pdb_orig = PDBMolecule(pdb_file, verbose=verbose)
 
@@ -677,6 +687,16 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 	if not os.path.isdir(plot_out_dir) and plot:
 		os.mkdir(plot_out_dir)
 
+	# Delete the rmsd file if it already exists
+	rmsd_filename = os.path.join(file_out_dir, rmsd_fname)
+	if rmsd:
+		if os.path.isfile(rmsd_filename):
+			if verbose:
+				print "Removing pre existing {} file".format(rmsd_fname)
+			os.remove(rmsd_filename)
+		rmsd_fd = open(rmsd_filename, 'w')
+		rmsd_fd.write("Iteration\tRMSD\n")
+
 	# Get the rotations for this round
 	if rotation == "triangular":
 		Rs = rotation_matrices(N=8)
@@ -687,11 +707,11 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 
 	
 
-	# For all unique branches from internal loops
+	# For all unique branches 
 	# Compute permutations with the R rotation matrices at loop
 	branches = pdb_orig.branches
 	if verbose:
-		print "A total of {} loops and {} branches to permute around".format(len(pdb_orig.internal_loops), len(branches))
+		print "A total of {} points and {} branches to permute around".format(len(pdb_orig.flexible_points), len(branches))
 	
 	# returns all branch rotation permutations
 	#rot_perms = permutations(xrange(len(Rs)), len(branches))
@@ -705,22 +725,26 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 	perm_count = 1	
 	for rot_perm in rot_perms:
 
-		#import ipdb; ipdb.set_trace()
 		f = copy.deepcopy(pdb_orig)
 		try:
+			# Originally a more descriptive format was used to identify the branch rotations
+			# Currently just increment a counter
+
 			#rot_name = sep.join(["B{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
-			#if rot_name == "B0R3_B1R3":
-			#	import ipdb; ipdb.set_trace()
-			#file_name = base_name + sep + rot_name
-			file_name = str(perm_count) + sep + base_name
+			rot_name = str(perm_count)
+			
+			file_name = rot_name + sep + base_name
 
 			for N, R in enumerate(rot_perm):
-				# Apply rotation R to internal loop branch N
+				# Apply rotation R to flexible point branch N
 				f.rotate_branch(N, Rs[R])
 		except BondInterferenceError:
 			if verbose:
 				print "Bond Interference detected.  Ignoring rotation"
 		else:
+			# calculate rmsd?
+			if rmsd:
+				rmsd_fd.write("{}\t{}\n".format(rot_name, f.rmsd))
 
 			# write the file and plot it
 			f.write(os.path.join(file_out_dir, file_name+".pdb"))
@@ -736,7 +760,8 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, p
 
 	if verbose:
 		print "Completed permutations on file {}".format(pdb_file)	
-
+	if rmsd:
+		rmsd_fd.close()
 
 def tests():
 	"""Change this as you need to test certain features"""
@@ -763,13 +788,12 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Program to parse a PDB file, identify isolation loops, and permute molecular rotations around those loops and write back to a set of PDB files")
 	parser.add_argument("args", help="One or more filenames or directories", nargs="+")
 	parser.add_argument("-v", "--verbose", help="Print details to console", action="store_true")
-#	parser.add_argument("-d", "--directory", help="Parse all PDB files in this directory", action="store")
 	parser.add_argument("-o", "--output", help="Output new PDB files to this directory", default=os.getcwd(), action="store")
-#	parser.add_argument("-f", "--file", help="Single PDB file to process", action="store")
-	parser.add_argument("-c", "--cubic", help="Rotate around a cubic structure, i.e. 90 deg", action="store_true")
+	parser.add_argument("-c", "--cubic", help="Rotate around a cubic structure (default), i.e. 90 deg", action="store_true")
 	parser.add_argument("-t", "--triangular", help="Roatate around a triangular structure, i.e. 45 deg", action="store_true")
 	parser.add_argument("-p", "--plot", help="Plot the rotated molecules in a `plots` subfolder", default=False, action="store_true")
 	parser.add_argument("-i", "--interactive", help="Plot figures interactively", action="store_true")
+	parser.add_argument("-r", "--rmsd", help="Calculate the root means square distance of each iteration and save all values to a file", action="store_true", default=False)
 	args = parser.parse_args()
 
 	print
@@ -794,13 +818,16 @@ if __name__ == "__main__":
 	if args.verbose:
 		print "Using {} rotation structure".format(rotation_method)
 
+	if args.rmsd:
+		if args.verbose:
+			print "Calulating RMSD for each iteration and saving results to a sub  directory of {}".format(args.output)
+
 	if args.interactive:
 		args.plot = True
 	
 	# Check the positional arguments
 	if args.args:
 		for arg in args.args:
-			import ipdb; ipdb.set_trace()
 			if os.path.isfile(arg):
 			
 				rotation_permutations_from_file(arg, 
@@ -808,7 +835,8 @@ if __name__ == "__main__":
 						verbose=args.verbose, 
 						plot=args.plot, 
 						out_dir=args.output, 
-						interactive=args.interactive)
+						interactive=args.interactive,
+						rmsd=args.rmsd)
 
 			elif os.path.isdir(arg):
 				# Its a directory, permute each file individually
@@ -821,7 +849,8 @@ if __name__ == "__main__":
 							verbose=args.verbose, 
 							plot=args.plot, 
 							out_dir=args.output, 
-							interactive=args.interactive)
+							interactive=args.interactive, 
+							rmsd=args.rmsd)
 
 			else:
 				print "Unknown argument: {}.  Skipping.".format(arg)
