@@ -49,6 +49,7 @@ import os
 import copy
 import shutil
 
+from itertools import product
 from pprint import pprint
 
 try:
@@ -57,6 +58,7 @@ except ImportError:
 	print "This program requires numpy to be installed.  Try `pip install numpy`"
 	sys.exit(1)
 
+# For now, use the module provided, but maybe in future merge this module in here
 import PDB
 
 __version__ = "0.9.0"
@@ -68,7 +70,7 @@ precision = 3 	# Number of decimals to save in float values
 plot_extension = ".pdf" # Default plot extension to use
 figure_size = [10, 10] #Figure size in inches.  Maybe put this in the matplotlibrc file?
 sep="-"
-rmsd_fname = "rmsd.txt"
+rmsd_fname = "rmsd.txt" # The default name to use for the file saving the RMSD of a molecule
 ##############################################################
 
 class BondInterferenceError(Exception):
@@ -273,8 +275,6 @@ class PDBMolecule(object):
 		ax.set_zlabel("Z")
 		plt.title("{}".format(plot_title))
 
-		#plt.legend(leg["handlers"], leg["labels"], "upper right")
-		
 		# save or show?
 		if file is not None:
 			plt.savefig(file, bbox=0.0)
@@ -292,7 +292,6 @@ class PDBMolecule(object):
 
 		# Quick and dirty way of extracting the atoms 
 		# and bonds in the molecule
-
 		for atom in self.data:
 			if "element" in atom:
 				# add atom
@@ -309,7 +308,7 @@ class PDBMolecule(object):
 		"""Flexible points defined as any element N, surrounded by C's
 		
 		Saves the flexible points to the molecule, does not return anything"""
-		loops = []
+		joints = []
 		if self.verbose:
 			print "Looking for flexible points"
 
@@ -332,88 +331,38 @@ class PDBMolecule(object):
 			if is_IL:
 				self.flexible_points.append(atom)
 				[self.branches.append([atom, bond]) for bond in atom.bonds]
-				#self.add_branches_from_loop(atom)
 
 		if self.verbose:
 			print "Found {} flexible points and {} branches".format(len(self.flexible_points), len(self.branches))
-			#pprint(loops)
-	'''
-	def add_branches_from_loop(loop_atom):
-		"""delete me"""
-		for bond in loop_atom.bonds:
-			self.branches.append(loop_atom, self.get_atom_by_id(bond))
-
-	def add_branch_from_atom(self, atom, bonded_atom):
-		"""delete me 
-		A branch is defined with an flexible point atom and a 
-		bonded atom"""
-		if atom in self.flexible_points:
-			# create new branches
-			# a branch is acomposed of an flexible point id and a neighbour id
-
-			for bond in atom.bonds:
-				#if bond == parent:
-				#	continue
-				if self.verbose:
-					print "Found a branch at {}, connected to {}".format(atom.seq_id, bond)
-				self.branches.append([atom.seq_id, bond])
-
-	def get_branches(self):
-		"""delete me
-
-		Find all branches to this molecule by traversing along
-		splitting at each flexible point
-		
-		Does not return anything"""
-
-		if not self.flexible_points:
-			return
-		if self.verbose:
-			print "Computing branches"
-		# Start at an end node
-		# Traverse until flexible point
-		
-		prev_atom = self.find_first()
-		curr_atom = self.find_next(prev_atom)
-		while True:
-			try:
-				parent_id = prev_atom.seq_id
-				prev_atom = curr_atom
-				curr_atom= self.find_next(curr_atom, parent_id)
-			except StopIteration:
-				if self.verbose:
-					print "Found {} branches".format(len(self.branches))
-				break
-			else:
-				self.add_branch_from_atom(curr_atom, prev_atom.seq_id)
-		
-	'''
 
 	def rotate_branch(self, branch_id, R):
 		"""Rotates a branch by a specified rotation matrix. The 
-		branch is given as a loop_atom and a bond_atom pair"""
+		branch is given as a joint_atom and a bond_atom pair.
+		The rotation matrix is applied to all atoms around the 
+		original branch bond direction, this is always relative
+		to the bond before rotation"""
 		
 		
 		# Get the branch
 		branch = self.branches[branch_id]
 		
-		loop_atom = branch[0]
+		joint_atom = branch[0]
 		branch_atom = self.get_atom_by_id(branch[1])
 		
-		rotation_axis = branch_atom.coordinates - loop_atom.coordinates
 		# normalize rotation_axis
+		rotation_axis = branch_atom.coordinates - joint_atom.coordinates
 		rotation_axis = rotation_axis / numpy.sqrt(numpy.dot(rotation_axis, rotation_axis))
 
-		# Check that the rotation of the bond axis does not collide with an existing bond
-
+		# This is the direction the bond axis will point after rotation 
 		rotated_axis = numpy.around(numpy.dot(R, rotation_axis), precision)
 
-
-		for bond in loop_atom.bonds:
+		# Ensure that this rotated bond axis is not parallel to another bond axis at 
+		# The flexible joint
+		for bond in joint_atom.bonds:
 			# Ignore itself
 			if bond == branch_atom.seq_id:
 				continue
-			bond_axis = self.get_atom_by_id(bond).coordinates - loop_atom.coordinates
+			bond_axis = self.get_atom_by_id(bond).coordinates - joint_atom.coordinates
 			bond_axis = bond_axis / numpy.sqrt(numpy.dot(bond_axis, bond_axis))
 			bond_axis = numpy.around(bond_axis, precision)
 			if numpy.allclose(numpy.dot(bond_axis, rotated_axis), 1):
@@ -422,11 +371,11 @@ class PDBMolecule(object):
 
 		# If no collision, continue with the rotation
 		# Get the subtree
-		st = self.get_subtree(loop_atom, branch_atom)
+		st = self.get_subtree(joint_atom, branch_atom)
 		
 		# Rotate all atoms of all sub branches
 		for atom in st:
-			atom.rotate(R, loop_atom.coordinates, rotation_axis)
+			atom.rotate(R, joint_atom.coordinates, rotation_axis)
 
 		
 	def center_coordinates(self):
@@ -466,46 +415,6 @@ class PDBMolecule(object):
 					a['x'] = atom.X
 					a['y'] = atom.Y
 					a['z'] = atom.Z
-
-
-	#def find_end_atoms(self):
-	#	return [atom for atom in self.atoms if len(atom.bonds)==1]
-
-
-	def find_first(self):
-		"""Look for node with only 1 bond"""
-
-		for atom in self.atoms:
-			if len(atom.bonds) == 1:
-				return atom
-	
-	def find_next(self, atom, parent=None):
-		"""Find the next atom along the chain"""	
-		for bond in atom.bonds:
-			if parent == bond:
-				continue
-			return self.get_atom_by_id(bond)
-
-		raise StopIteration
-
-
-
-
-
-
-	def find_next_loop(self, atom, parent=None):
-		"""skip through the molecule bonds until a flexible point  is found"""
-		for bond_id in atom.bonds:
-			if parent and parent == bond_id:
-				continue
-			bond = self.get_atom_by_id(bond_id)
-
-			if bond in self.flexible_points:
-				return bond, atom.seq_id
-
-			return self.find_next_loop(bond, parent=atom.seq_id)
-
-		return None, None
 
 	def get_atom_by_id(self, atom_id):
 		"""Search the available atoms to find one named by its id"""
@@ -703,9 +612,6 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 	else:
 		Rs = rotation_matrices(N=4)
 
-	from itertools import product, permutations
-
-	
 
 	# For all unique branches 
 	# Compute permutations with the R rotation matrices at loop
@@ -713,15 +619,11 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 	if verbose:
 		print "A total of {} points and {} branches to permute around".format(len(pdb_orig.flexible_points), len(branches))
 	
-	# returns all branch rotation permutations
-	#rot_perms = permutations(xrange(len(Rs)), len(branches))
-	#rot_perms = combinations_with_replacement(xrange(len(Rs)), len(branches))
-	
-	#For each internal node, get the rotation permutations
+	#For each branch, get the rotation permutations 
 	perms_storage = []
 	rot_perms = product(xrange(len(Rs)), repeat=len(branches))
 		
-	# now find all combinations of the these loop rotations over the molecule
+	# Iterate over each set of rotations
 	perm_count = 1	
 	for rot_perm in rot_perms:
 
@@ -735,9 +637,10 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 			
 			file_name = rot_name + sep + base_name
 
+			# Rotate all the branches with their respective rotation matrix for this iteration
 			for N, R in enumerate(rot_perm):
-				# Apply rotation R to flexible point branch N
 				f.rotate_branch(N, Rs[R])
+
 		except BondInterferenceError:
 			if verbose:
 				print "Bond Interference detected.  Ignoring rotation"
@@ -763,27 +666,9 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 	if rmsd:
 		rmsd_fd.close()
 
-def tests():
-	"""Change this as you need to test certain features"""
-	basedir=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-	test_file = os.path.join(basedir, "test", "initialGraphs", "1B36_A_Graph.pdb")
-	#test_file = os.path.join(basedir, "data", "initialGraphs", "1GID_A_Graph.pdb")
-	#print "Using file {}".format(test_file)	
-	#test_pdb = PDBMolecule(test_file, verbose=True)
-	#pprint(test_pdb.atoms)
-
-
-	#test_pdb.plot_molecule(file='./tmp/test.molecule.pdf')
-	#test_pdb.plot_molecule()
-
-	out_dir = "tmp/out"
-	if os.path.isdir(out_dir):
-		shutil.rmtree(out_dir)
-		os.makedirs(out_dir)
-
-	rotation_permutations_from_file(test_file, rotation="cubic", verbose=True, out_dir=out_dir,  plot=True, interactive=True)
-
-if __name__ == "__main__":
+def main():
+	"""Runs the script parsing arguments"""
+	
 	import argparse
 	parser = argparse.ArgumentParser(description="Program to parse a PDB file, identify isolation loops, and permute molecular rotations around those loops and write back to a set of PDB files")
 	parser.add_argument("args", help="One or more filenames or directories", nargs="+")
@@ -855,4 +740,7 @@ if __name__ == "__main__":
 			else:
 				print "Unknown argument: {}.  Skipping.".format(arg)
 	print "All Done.  Have a nice day"
-	
+
+
+if __name__ == "__main__":
+	main()	
