@@ -1,5 +1,5 @@
 %Marathon Manual
-%Tim van Boxtel
+%
 %April 1, 2013
 
 # Introduction #
@@ -105,7 +105,7 @@ In general, the rotation matrices are computed from using the [Euler-Rodrigues F
 A cubic lattice is the set of 90 degree rotations that a branch can undergo in 3D space. For the unit 
 branch shown in Figure 1, there are 6 unique rotations that can be performed relative to the branch vector.
 
-![cubic unit rotation lattice.  There are 6 rotations per branch](doc/img/cubic_lattice.png)
+![cubic unit rotation lattice.  There are 6 rotations per branch](/home/tim/Documents/freelance/projects/2013/03/marathon/doc/img/cubic_lattice.png)
 
 
 ### Triangular ###
@@ -113,7 +113,7 @@ branch shown in Figure 1, there are 6 unique rotations that can be performed rel
 Similar to the cubic case, but the unit branch is rotated in increments of 45 degrees. This set is larger than
 the cubic case with 26 unique rotations on a single unit branch, as can be seen in Figure 2.
 
-![Triangular unit rotation lattice.  There are 26 unique rotations per branc](doc/img/triangular_lattice.png)
+![Triangular unit rotation lattice.  There are 26 unique rotations per branch](/home/tim/Documents/freelance/projects/2013/03/marathon/doc/img/triangular_lattice.png)
 
 ## Permutations of Branch Rotations ##
 
@@ -148,8 +148,5 @@ As an example, the unit branch rotated over a cubic lattice results in $R=6$, $B
 gives a total of 30 unique rotations without branch overlap. Consequently, for the same molecule and a 
 triangular rotation lattice, $R=26$, $B=2$, ${O}_{L}=26$ giving 650 unique rotations.
 
-# Contact #
 
-The original author of the script can be contacted at <tim@vanboxtel.ca> with questions.
-The source code can be found at <http://github.com/SunPowered/marathon.git>
 
