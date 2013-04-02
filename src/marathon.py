@@ -95,7 +95,7 @@ def Ry(alpha):
 def rotation_matrices(N=4, verbose=False):
 	"""Split a unit circle into N equal sections and permute rotatations around
 	the Y and Z axis this many times.  I.e. cubic rotations, N=4.  Triangular 
-	rotations, N=8.  Ignore the case when the rotation angle is [pi/2, 0]
+	rotations, N=8.  
 	
 	Assumes the original bond vector is along the X axis, these rotations must
 	be adjusted if the original vector is off
@@ -123,13 +123,13 @@ def rotation_matrices(N=4, verbose=False):
 		for nz in xrange(N):
 			if (nz == 0) and (ny==0):
 				continue
-			
+			'''
 			if (nz*step == numpy.pi) and (ny == 0 ):
 				# Ignore the rotation that turns it on the incoming bond
 				if verbose:
 					print "Ignoring nz {} / ny {}".format(nz, ny)
 				continue
-			
+			'''
 			if verbose:
 				print "Nz: {} / Ny: {}".format(nz,ny)
 
@@ -156,6 +156,7 @@ class PDBMolecule(object):
 		self.atoms = []
 		self.flexible_points = []
 		self.branches = []
+		self.rotated_branches = []
 		self.read()
 
 	def __str__(self):
@@ -362,6 +363,8 @@ class PDBMolecule(object):
 			# Ignore itself
 			if bond == branch_atom.seq_id:
 				continue
+			if bond not in self.rotated_branches:
+				continue
 			bond_axis = self.get_atom_by_id(bond).coordinates - joint_atom.coordinates
 			bond_axis = bond_axis / numpy.sqrt(numpy.dot(bond_axis, bond_axis))
 			bond_axis = numpy.around(bond_axis, precision)
@@ -376,7 +379,7 @@ class PDBMolecule(object):
 		# Rotate all atoms of all sub branches
 		for atom in st:
 			atom.rotate(R, joint_atom.coordinates, rotation_axis)
-
+		self.rotated_branches.append(branch_atom.seq_id)
 		
 	def center_coordinates(self):
 		"""Translate the structure so that an atom in the middle lies at 0,0"""
@@ -550,7 +553,7 @@ class PDBAtom(object):
 
 
 def rotation_matrix(axis,theta):
-	"""Euler-Rodriguez angles"""
+	"""Euler-Rodrigues angles"""
 	axis = axis/numpy.sqrt(numpy.dot(axis,axis))
 
 	a = numpy.cos(theta/2)
@@ -632,8 +635,8 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 			# Originally a more descriptive format was used to identify the branch rotations
 			# Currently just increment a counter
 
-			#rot_name = sep.join(["B{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
-			rot_name = str(perm_count)
+			rot_name = sep.join(["B{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
+			#rot_name = str(perm_count)
 			
 			file_name = rot_name + sep + base_name
 

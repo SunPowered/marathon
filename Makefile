@@ -1,6 +1,5 @@
 .PHONY: all test clean
 
-OUT_DIR=tmp/out
 SCRIPT=src/marathon.py
 TEST_SCRIPT=test/test_marathon.py
 
@@ -9,4 +8,9 @@ remove:
 
 test: 
 	python $(TEST_SCRIPT)
+	
+clean-docs:
+	rm doc/marathon.pdf
 
+docs: 
+	pandoc -o doc/marathon.pdf -s --toc doc/marathon.md
