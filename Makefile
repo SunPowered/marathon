@@ -13,4 +13,4 @@ clean-docs:
 	rm doc/marathon.pdf
 
 docs: 
-	pandoc -o doc/marathon.pdf -s --toc doc/marathon.md
+	pandoc -o doc/marathon.pdf -s --toc --latex-engine=xelatex doc/marathon.md

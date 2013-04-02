@@ -61,7 +61,7 @@ except ImportError:
 # For now, use the module provided, but maybe in future merge this module in here
 import PDB
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 ###############################################################
 # Program Options
@@ -564,7 +564,7 @@ def rotation_matrix(axis,theta):
 		
 
 def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, 
-		plot=False, out_dir=None, interactive=False, rmsd=False):
+		plot=False, out_dir=None, interactive=False, rmsd=False, detailed=False):
 
 	"""The main function to process files.
 	
@@ -632,11 +632,10 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 
 		f = copy.deepcopy(pdb_orig)
 		try:
-			# Originally a more descriptive format was used to identify the branch rotations
-			# Currently just increment a counter
-
-			rot_name = sep.join(["B{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
-			#rot_name = str(perm_count)
+			if detailed:
+				rot_name = sep.join(["B{}R{}".format(N, R) for N, R  in enumerate(rot_perm)])
+			else:
+				rot_name = str(perm_count)
 			
 			file_name = rot_name + sep + base_name
 
@@ -682,6 +681,7 @@ def main():
 	parser.add_argument("-p", "--plot", help="Plot the rotated molecules in a `plots` subfolder", default=False, action="store_true")
 	parser.add_argument("-i", "--interactive", help="Plot figures interactively", action="store_true")
 	parser.add_argument("-r", "--rmsd", help="Calculate the root means square distance of each iteration and save all values to a file", action="store_true", default=False)
+	parser.add_argument('-d', '--detailed', help="Save the iteration names with detailed information for each branch and rotation number, otherwise just use the iteration counter as a name", default=False, action="store_true")
 	args = parser.parse_args()
 
 	print
@@ -724,7 +724,8 @@ def main():
 						plot=args.plot, 
 						out_dir=args.output, 
 						interactive=args.interactive,
-						rmsd=args.rmsd)
+						rmsd=args.rmsd,
+						detailed=args.detailed)
 
 			elif os.path.isdir(arg):
 				# Its a directory, permute each file individually
@@ -738,7 +739,8 @@ def main():
 							plot=args.plot, 
 							out_dir=args.output, 
 							interactive=args.interactive, 
-							rmsd=args.rmsd)
+							rmsd=args.rmsd,
+							detailed=args.detailed)
 
 			else:
 				print "Unknown argument: {}.  Skipping.".format(arg)

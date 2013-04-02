@@ -38,6 +38,16 @@ one can simply execute::
 This will save .pdb files in the `output_dir/mymol/` directory corresponding to each
 rotation iteration
 
+By default, the iterations are simply numbered incrementally from 1.  If more detailed iteration names are required,
+the `-d` or `--detailed` flags are available which will save the filenames in a more detailed manner stating the 
+exact rotation matrix on each branch that was applied for that iteration, this takes a form [B?R?], where '?' are
+the branch number and roation number, accordingly.
+
+The script can optionally calculate the root mean square distance for each iteration.  This is done by calling 
+the `-r` or `--rmsd` flags during program execution.  This will create a file 'rmsd.txt' in the output
+directory and append the iteration name and rmsd for that iteration.  The script `min_rmsd.py` can read this
+file to output the iterations with the minimum values.
+
 For a full description of all options available from the command line, type::
 
 	python marathon.py --help
@@ -127,7 +137,7 @@ overlapping bond rotations, where $b_{i}$ is the number of bonds at flexible poi
 number of unit rotations.  This is intuitive as for the $i$th flexible point, there will a total of $R*(b_{i})$ overlaps.
 
 
-## Expected Number of Iterations ##za
+## Expected Number of Iterations ##
 
 Combining the rotation lattice and branch numbers with the expected branch overlap yields 
 a total iteration count of 
