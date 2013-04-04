@@ -49,7 +49,7 @@ import os
 import copy
 import shutil
 
-from itertools import product
+from itertools import product, permutations
 from pprint import pprint
 
 try:
@@ -78,21 +78,6 @@ interference_fname = "interfering.iterations.txt"
 class BondInterferenceError(Exception):
 	pass
 
-def Rz(alpha):
-	"""Rotation matrix around the z axis"""
-
-	cosa = numpy.around(numpy.cos(alpha),2*precision)
-	sina = numpy.around(numpy.sin(alpha), 2*precision)
-
-	return numpy.array([[cosa, -sina, 0], [sina, cosa, 0],[0, 0, 1]])
-
-def Ry(alpha):
-	"""Rotation matrix around the y axis"""
-	cosa = numpy.around(numpy.cos(alpha), 2*precision)
-	sina = numpy.around(numpy.sin(alpha), 2*precision)
-
-	return numpy.array([[cosa, 0, -sina], [0, 1, 0], [sina, 0, cosa]])
-
 def normalize(vector):
 	return vector / numpy.sqrt(numpy.dot(vector,vector))
 
@@ -105,54 +90,11 @@ def cubic_bond_directions():
 def triangular_bond_directions():
 	vectors = [[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0], 
 			[1, 1, 1], [-1, 1, 1], [-1, -1, 1], [1, -1, 1],
-			[1, 1, -1], [0, -1, 0], [-1, -1, -1], [1, -1, -1]]
+			[1, 1, -1], [-1, 1, -1], [-1, -1, -1], [1, -1, -1]]
 
 	return vectors
 
-def rotation_matrices(N=4, verbose=False):
-	"""Split a unit circle into N equal sections and permute rotations around
-	the Y and Z axis this many times.  I.e. cubic rotations, N=4.  Triangular 
-	rotations, N=8.  
-	
-	Assumes the original bond vector is along the X axis, these rotations must
-	be adjusted if the original vector is off
-	"""
-	if N not in [4, 8]:
-		raise ValueError("Only N of 4 and 8 are currently supported")
 
-	step = 2*numpy.pi/N
-	
-	if verbose:
-		print "Rotation Matrices with N: {}".format(N)
-		print "step: {}".format(step)
-
-	
-	# Its nice to have the identity  matrix come first
-	matrices = [numpy.identity(3)]
-
-	
-	for ny in xrange(-N/4, N/4+1):
-		if (ny == -N/4) or (ny == N/4):
-			if verbose:
-				print "Ny: {}".format(ny)
-			matrices.append(Ry(ny*step))
-			continue
-		for nz in xrange(N):
-			if (nz == 0) and (ny==0):
-				continue
-			'''
-			if (nz*step == numpy.pi) and (ny == 0 ):
-				# Ignore the rotation that turns it on the incoming bond
-				if verbose:
-					print "Ignoring nz {} / ny {}".format(nz, ny)
-				continue
-			'''
-			if verbose:
-				print "Nz: {} / Ny: {}".format(nz,ny)
-
-			matrices.append(numpy.dot(Rz(nz*step), Ry(ny*step)))
-	return matrices
-	
 class PDBMolecule(object):
 	"""PDB molecule data structure.  This holds all information 
 	pertaining to one molecule.  It is capable of reading from a 
@@ -174,6 +116,7 @@ class PDBMolecule(object):
 		self.flexible_points = []
 		self.branches = []
 		self.rotated_branches = {}
+		self.rotation_labels = []
 		self.read()
 
 	def __repr__(self):
@@ -215,7 +158,7 @@ class PDBMolecule(object):
 			pprint(plot_atoms[lbl]["atoms"][ind[0]])
 
 	
-		plot_title = title or self.file_name
+		plot_title = title or self.file_name + "{}".format(sep).join(self.rotation_labels)
 		
 		# get axes
 		fig = plt.figure(1, figsize=figure_size)
@@ -357,13 +300,14 @@ class PDBMolecule(object):
 		if self.verbose:
 			print "Found {} flexible points and {} branches".format(len(self.flexible_points), len(self.branches))
 
-	def rotate_branch_to_direction(self, branch_id, new_vector):
+	def rotate_branch_to_direction(self, branch_id, new_vector, rotation_label=None):
 		"""This allows a branch to be rotated such that its
 			bond vector is pointing along a specified direction"""
-
+		
 		def bond_vector(branch):
 			bv = self.get_atom_by_id(branch[1]).coordinates - branch[0].coordinates
 			return normalize(bv)
+
 
 		new_vector = normalize(new_vector)
 
@@ -384,7 +328,7 @@ class PDBMolecule(object):
 			# See if the new_vector overlaps with any  other that have already been rotated
 			for br in self.rotated_branches[joint_atom.seq_id]:
 				bvec = bond_vector([joint_atom, br])
-				if numpy.all(new_vector == bvec):
+				if numpy.allclose(new_vector, bvec):
 					raise BondInterferenceError("Interfering Bond")
 
 
@@ -416,7 +360,8 @@ class PDBMolecule(object):
 				atom.rotate(R, joint_atom.coordinates, rotation_axis)
 		
 		self.rotated_branches[joint_atom.seq_id].append(branch[1])
-		
+		if rotation_label:
+			self.rotation_labels.append(rotation_label)
 
 	def rotate_branch(self, branch_id, R):
 		"""Rotates a branch by a specified rotation matrix. The 
@@ -625,22 +570,11 @@ class PDBAtom(object):
 		
 		rot_unit = numpy.cross(rc_norm, direction)
 
-		rot_R = numpy.identity(3)
-		if not (rot_unit==0).all():
-			pass
-			# Adjust axes
-			#dot = numpy.dot(rc_norm, direction)
-		
-			#rot_theta = numpy.arccos(numpy.dot(rc_norm, direction))
-			#rot_R = rotation_matrix(direction, rot_theta)
-			#rc = numpy.dot(rot_R, rc)
-
-		
+	
 		# apply rotation matrix to this rotated point
 		rc = numpy.dot(matrix, rc)
 
 		# Revert back to original coordinates
-		rc = numpy.dot(numpy.transpose(rot_R), rc)
 		rc = rc + point
 
 		# Save coordinates to atom
@@ -739,11 +673,11 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 	
 	#For each branch, get the rotation permutations 
 	perms_storage = []
-	rot_perms = product(xrange(len(Rs)), repeat=len(branches))
-		
+	#rot_perms = product(xrange(len(Rs)), repeat=len(branches))
+	rot_perms = permutations(xrange(len(Rs)), len(branches))	
 	print "Running . . . "
 	# Iterate over each set of rotations
-	perm_count = 1	
+	perm_count = 0	
 	overlap_count = 0
 	for rot_perm in rot_perms:
 
@@ -755,8 +689,7 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 				rot_name = str(perm_count)
 			
 			file_name = rot_name + sep + base_name
-			if rot_perm == (0,1,0,0):
-				pass
+			
 
 			# Rotate all the branches with their respective rotation matrix for this iteration
 			for N, R in enumerate(rot_perm):

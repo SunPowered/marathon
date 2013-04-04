@@ -41,3 +41,4 @@ matplotlibrc
 data
 release
 test/output
+test/debug
