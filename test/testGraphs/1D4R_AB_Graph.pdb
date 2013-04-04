@@ -1,0 +1,26 @@
+ATOM      1  N     G A   1     -39.076      -0      -0  1.00 99.99           N
+ATOM      2  C     G A   2     -39.076      -0      -0  1.00 99.99           C
+ATOM      3  N     G A   3      59.834       0       0  1.00 99.99           N
+ATOM      4  C     G A   4      54.948       0       0  1.00 99.99           C
+ATOM      5  N     G A   5     -22.408      -0      -0  1.00 99.99           N
+ATOM      6  C     G A   6     -27.596      -0      -0  1.00 99.99           C
+ATOM      7  C     G A   7      -17.22      -0      -0  1.00 99.99           C
+ATOM      8  N     G A   8       7.936       0       0  1.00 99.99           N
+ATOM      9  C     G A   9           0       0       0  1.00 99.99           C
+ATOM     10  C     G A  10      15.872       0       0  1.00 99.99           C
+ATOM     11  N     G A  11       38.28       0       0  1.00 99.99           N
+ATOM     12  C     G A  12      33.092       0       0  1.00 99.99           C
+ATOM     13  C     G A  13      43.468       0       0  1.00 99.99           C
+TER
+CONECT    1    2
+CONECT    2    6
+CONECT    3    4
+CONECT    4   13
+CONECT    5    6
+CONECT    5    7
+CONECT    7    9
+CONECT    8    9
+CONECT    8   10
+CONECT   10   12
+CONECT   11   12
+CONECT   11   13

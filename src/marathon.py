@@ -61,7 +61,7 @@ except ImportError:
 # For now, use the module provided, but maybe in future merge this module in here
 import PDB
 
-__version__ = "0.9.1"
+__version__ = "0.9.2"
 
 ###############################################################
 # Program Options
@@ -69,8 +69,10 @@ __version__ = "0.9.1"
 precision = 3 	# Number of decimals to save in float values
 plot_extension = ".pdf" # Default plot extension to use
 figure_size = [10, 10] #Figure size in inches.  Maybe put this in the matplotlibrc file?
-sep="-"
+sep="_"
+rotations_dir="rotations"
 rmsd_fname = "rmsd.txt" # The default name to use for the file saving the RMSD of a molecule
+interference_fname = "interfering.iterations.txt"
 ##############################################################
 
 class BondInterferenceError(Exception):
@@ -91,9 +93,24 @@ def Ry(alpha):
 
 	return numpy.array([[cosa, 0, -sina], [0, 1, 0], [sina, 0, cosa]])
 
+def normalize(vector):
+	return vector / numpy.sqrt(numpy.dot(vector,vector))
+
+
+def cubic_bond_directions():
+	vectors = [[1,0,0], [0,1,0], [0,0,1],
+			[-1, 0, 0], [0,-1,0], [0,0,-1]]
+	return vectors
+
+def triangular_bond_directions():
+	vectors = [[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0], 
+			[1, 1, 1], [-1, 1, 1], [-1, -1, 1], [1, -1, 1],
+			[1, 1, -1], [0, -1, 0], [-1, -1, -1], [1, -1, -1]]
+
+	return vectors
 
 def rotation_matrices(N=4, verbose=False):
-	"""Split a unit circle into N equal sections and permute rotatations around
+	"""Split a unit circle into N equal sections and permute rotations around
 	the Y and Z axis this many times.  I.e. cubic rotations, N=4.  Triangular 
 	rotations, N=8.  
 	
@@ -156,12 +173,16 @@ class PDBMolecule(object):
 		self.atoms = []
 		self.flexible_points = []
 		self.branches = []
-		self.rotated_branches = []
+		self.rotated_branches = {}
 		self.read()
 
-	def __str__(self):
-		return str(self.data)
+	def __repr__(self):
+		return "{}".format(self.branches)
 	
+	def __str__(self):
+		return "PDBMolecule({})[{} atoms, {} rotation branches]".format(self.file_name, 
+				len(self.atoms), len(self.branches))
+
 	def plot_molecule(self, file=None, title=None):
 		"""Plot the current molecular structure.
 		
@@ -336,6 +357,67 @@ class PDBMolecule(object):
 		if self.verbose:
 			print "Found {} flexible points and {} branches".format(len(self.flexible_points), len(self.branches))
 
+	def rotate_branch_to_direction(self, branch_id, new_vector):
+		"""This allows a branch to be rotated such that its
+			bond vector is pointing along a specified direction"""
+
+		def bond_vector(branch):
+			bv = self.get_atom_by_id(branch[1]).coordinates - branch[0].coordinates
+			return normalize(bv)
+
+		new_vector = normalize(new_vector)
+
+		# Get the branch
+		branch = self.branches[branch_id]
+		
+		# Get bond vector of branch
+		bond_vec = bond_vector(branch)
+	
+		# Check already rotated vectors at that joint_atom
+		joint_atom = branch[0]
+
+
+		if joint_atom.seq_id not in self.rotated_branches:
+			# This is the first branch of the joint
+			self.rotated_branches[joint_atom.seq_id] = []
+		else:
+			# See if the new_vector overlaps with any  other that have already been rotated
+			for br in self.rotated_branches[joint_atom.seq_id]:
+				bvec = bond_vector([joint_atom, br])
+				if numpy.all(new_vector == bvec):
+					raise BondInterferenceError("Interfering Bond")
+
+
+		
+		# check if no rotation needed
+		if not numpy.all(bond_vec == new_vector):
+
+
+			# Get the cross product vector, this is the axis of rotation
+			rotation_axis = numpy.cross(bond_vec, new_vector)
+			rotation_theta = numpy.arccos(numpy.dot(bond_vec, new_vector))
+		
+			if numpy.all(rotation_axis == 0):
+				# This happens when the vectors are opposed by pi/2, spin the branch around the z axis
+			
+				# Something needs to be done here ...
+				rotation_axis = numpy.array([0,0,1])
+				R = rotation_matrix(rotation_axis, numpy.pi) 
+			else:
+				# If the axis is not equal to itself, then rotate it
+				# rotate the subtree along this branch by rotation theta around rotation axis
+				R = rotation_matrix(rotation_axis, rotation_theta)
+		
+			# Apply the rotation
+			st = self.get_subtree(joint_atom, self.get_atom_by_id(branch[1]))
+		
+			# Rotate all atoms of all sub branches
+			for atom in st:
+				atom.rotate(R, joint_atom.coordinates, rotation_axis)
+		
+		self.rotated_branches[joint_atom.seq_id].append(branch[1])
+		
+
 	def rotate_branch(self, branch_id, R):
 		"""Rotates a branch by a specified rotation matrix. The 
 		branch is given as a joint_atom and a bond_atom pair.
@@ -350,6 +432,9 @@ class PDBMolecule(object):
 		joint_atom = branch[0]
 		branch_atom = self.get_atom_by_id(branch[1])
 		
+		if joint_atom.seq_id not in self.rotated_branches:
+			self.rotated_branches[joint_atom.seq_id] = []
+
 		# normalize rotation_axis
 		rotation_axis = branch_atom.coordinates - joint_atom.coordinates
 		rotation_axis = rotation_axis / numpy.sqrt(numpy.dot(rotation_axis, rotation_axis))
@@ -357,13 +442,13 @@ class PDBMolecule(object):
 		# This is the direction the bond axis will point after rotation 
 		rotated_axis = numpy.around(numpy.dot(R, rotation_axis), precision)
 
-		# Ensure that this rotated bond axis is not parallel to another bond axis at 
-		# The flexible joint
+		# Ensure that this rotated bond axis is not overlapping  another bond axis at 
+		# The flexible joint which has already been rotated
 		for bond in joint_atom.bonds:
 			# Ignore itself
 			if bond == branch_atom.seq_id:
 				continue
-			if bond not in self.rotated_branches:
+			if bond not in self.rotated_branches[joint_atom.seq_id]:
 				continue
 			bond_axis = self.get_atom_by_id(bond).coordinates - joint_atom.coordinates
 			bond_axis = bond_axis / numpy.sqrt(numpy.dot(bond_axis, bond_axis))
@@ -379,7 +464,7 @@ class PDBMolecule(object):
 		# Rotate all atoms of all sub branches
 		for atom in st:
 			atom.rotate(R, joint_atom.coordinates, rotation_axis)
-		self.rotated_branches.append(branch_atom.seq_id)
+		self.rotated_branches[joint_atom.seq_id].append(branch_atom.seq_id)
 		
 	def center_coordinates(self):
 		"""Translate the structure so that an atom in the middle lies at 0,0"""
@@ -500,8 +585,11 @@ class PDBAtom(object):
 	def coordinates(self):
 		return numpy.array([self.X, self.Y, self.Z])
 
-	def __repr__(self):
+	def __str__(self):
 		return "PDBAtom {} ({}) at ({}, {}, {}).  Bond({})".format(self.seq_id, self.element, self.X, self.Y, self.Z, self.bonds)
+
+	def __repr__(self):
+		return "{}@({},{},{})".format(self.seq_id, self.X, self.Y, self.Z)
 
 	def rotate(self, matrix, point=numpy.array([0,0,0]), direction=numpy.array([1, 0,0]), verbose=False):
 		"""Rotates the  atom with respect to a point and direction
@@ -514,9 +602,10 @@ class PDBAtom(object):
 			pprint(matrix)
 			print "rotation point: {}".format(point)
 			print "direction: {}".format(direction)
+		
 
 		# Normalize direction
-		direction = direction / numpy.sqrt(numpy.dot(direction, direction))
+		directon = normalize(direction)
 		rc = self.coordinates - point
 		rc_mag = numpy.dot(rc, rc)
 		if numpy.allclose(rc_mag, 0):
@@ -525,18 +614,26 @@ class PDBAtom(object):
 				return
 				
 		# Normalize 
-		rc_norm = rc/numpy.sqrt(rc_mag)
+		rc_norm = normalize(rc)
 		
 
 
 		# Coordinates must be rotated to be in line with the parent
 		# This rotation is along the vector perpendicular to both rc and direction
-		rot_unit = numpy.cross(rc_norm, direction)
-		dot = numpy.dot(rc_norm, direction)
+		# If the direction of rotation and the normalized relative vector (between atom and rotation point)
+		# are parallel, then no adjustment needed
 		
-		rot_theta = numpy.arccos(numpy.dot(rc_norm, direction))
-		rot_R = rotation_matrix(direction, rot_theta)
-		rc = numpy.dot(rot_R, rc)
+		rot_unit = numpy.cross(rc_norm, direction)
+
+		rot_R = numpy.identity(3)
+		if not (rot_unit==0).all():
+			pass
+			# Adjust axes
+			#dot = numpy.dot(rc_norm, direction)
+		
+			#rot_theta = numpy.arccos(numpy.dot(rc_norm, direction))
+			#rot_R = rotation_matrix(direction, rot_theta)
+			#rc = numpy.dot(rot_R, rc)
 
 		
 		# apply rotation matrix to this rotated point
@@ -553,18 +650,19 @@ class PDBAtom(object):
 
 
 def rotation_matrix(axis,theta):
-	"""Euler-Rodrigues angles"""
-	axis = axis/numpy.sqrt(numpy.dot(axis,axis))
+	"""Euler-Rodrigues angles, theta inverted for current coordinate system """
+	axis = normalize(axis)
 
-	a = numpy.cos(theta/2)
-	b,c,d = -axis*numpy.sin(theta/2)
-	return numpy.array([[a*a+b*b-c*c-d*d, 2*(b*c-a*d), 2*(b*d+a*c)],
+	a = numpy.cos(-theta/2)
+	b,c,d = -axis*numpy.sin(-theta/2)
+	return numpy.round(numpy.array([[a*a+b*b-c*c-d*d, 2*(b*c-a*d), 2*(b*d+a*c)],
                      [2*(b*c+a*d), a*a+c*c-b*b-d*d, 2*(c*d-a*b)],
-                      [2*(b*d-a*c), 2*(c*d+a*b), a*a+d*d-b*b-c*c]])
+                      [2*(b*d-a*c), 2*(c*d+a*b), a*a+d*d-b*b-c*c]]), 2*precision)
 		
 
 def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False, 
-		plot=False, out_dir=None, interactive=False, rmsd=False, detailed=False):
+		plot=False, out_dir=None, interactive=False, rmsd=False, detailed=False,
+		print_skips=False):
 
 	"""The main function to process files.
 	
@@ -581,19 +679,32 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 	
 	# Read file and find flexible points
 
-	pdb_orig = PDBMolecule(pdb_file, verbose=verbose)
+	#pdb_orig = PDBMolecule(pdb_file, verbose=verbose)
+	pdb_orig = PDBMolecule(pdb_file)
 
 	base_name = os.path.splitext(pdb_orig.file_name)[0]
+	
+	# Get the rotations for this round
+	if rotation == "triangular":
+		#Rs = rotation_matrices(N=8)
+		Rs = triangular_bond_directions()
+		lattice_file_suffix = "t"
+	else:
+		#Rs = rotation_matrices(N=4)
+		Rs = cubic_bond_directions()
+		lattice_file_suffix = "c"
+
 
 	# Check the output directory
 	if not out_dir:
 		out_dir = os.path.dirname(pdb_file)
-	file_out_dir = os.path.join(out_dir, base_name)
+	file_out_dir = os.path.join(out_dir, base_name + sep + lattice_file_suffix)
+	rotations_out_dir = os.path.join(file_out_dir, rotations_dir)
 
 	if not os.path.isdir(file_out_dir):
 		if verbose:
 			print "Output Directory not found.  Creating: {}".format(file_out_dir)
-		os.makedirs(file_out_dir)
+		os.makedirs(rotations_out_dir)
 	
 	plot_out_dir = os.path.join(file_out_dir, "plots")
 	if not os.path.isdir(plot_out_dir) and plot:
@@ -609,13 +720,17 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 		rmsd_fd = open(rmsd_filename, 'w')
 		rmsd_fd.write("Iteration\tRMSD\n")
 
-	# Get the rotations for this round
-	if rotation == "triangular":
-		Rs = rotation_matrices(N=8)
-	else:
-		Rs = rotation_matrices(N=4)
+	interference_filename = os.path.join(file_out_dir, interference_fname)
+	if print_skips:
+		if verbose:
+			print "Saving interference detected iterations to {}".format(interference_filename)
+		if os.path.isfile(interference_filename):
+			if verbose:
+				print "Removing pre existing {} file.format(interference_fname)"
+			os.remove(interference_filename)
+		int_fd = open(interference_filename, 'w')
 
-
+	
 	# For all unique branches 
 	# Compute permutations with the R rotation matrices at loop
 	branches = pdb_orig.branches
@@ -626,8 +741,10 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 	perms_storage = []
 	rot_perms = product(xrange(len(Rs)), repeat=len(branches))
 		
+	print "Running . . . "
 	# Iterate over each set of rotations
 	perm_count = 1	
+	overlap_count = 0
 	for rot_perm in rot_perms:
 
 		f = copy.deepcopy(pdb_orig)
@@ -638,21 +755,25 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 				rot_name = str(perm_count)
 			
 			file_name = rot_name + sep + base_name
+			if rot_perm == (0,1,0,0):
+				pass
 
 			# Rotate all the branches with their respective rotation matrix for this iteration
 			for N, R in enumerate(rot_perm):
-				f.rotate_branch(N, Rs[R])
+				#f.rotate_branch(N, Rs[R])
+				f.rotate_branch_to_direction(N, Rs[R])
 
 		except BondInterferenceError:
-			if verbose:
-				print "Bond Interference detected.  Ignoring rotation"
+			if print_skips:
+				int_fd.write(rot_name+"\n")
+			overlap_count += 1
 		else:
 			# calculate rmsd?
 			if rmsd:
 				rmsd_fd.write("{}\t{}\n".format(rot_name, f.rmsd))
 
 			# write the file and plot it
-			f.write(os.path.join(file_out_dir, file_name+".pdb"))
+			f.write(os.path.join(rotations_out_dir, file_name+".pdb"))
 			if plot:
 				if interactive:
 					plot_file = None
@@ -662,11 +783,15 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 			perm_count += 1
 		finally:
 			del f
+	print "Done"
 
 	if verbose:
 		print "Completed permutations on file {}".format(pdb_file)	
+		print "A total of {} permutations were accepted, with {} rejected".format(perm_count, overlap_count)
 	if rmsd:
 		rmsd_fd.close()
+	if print_skips:
+		int_fd.close()
 
 def main():
 	"""Runs the script parsing arguments"""
@@ -682,6 +807,7 @@ def main():
 	parser.add_argument("-i", "--interactive", help="Plot figures interactively", action="store_true")
 	parser.add_argument("-r", "--rmsd", help="Calculate the root means square distance of each iteration and save all values to a file", action="store_true", default=False)
 	parser.add_argument('-d', '--detailed', help="Save the iteration names with detailed information for each branch and rotation number, otherwise just use the iteration counter as a name", default=False, action="store_true")
+	parser.add_argument('--print-skips', help="Print the skipped rotation iteration names to a file in the output directory", default=False, action="store_true")
 	args = parser.parse_args()
 
 	print
@@ -725,7 +851,8 @@ def main():
 						out_dir=args.output, 
 						interactive=args.interactive,
 						rmsd=args.rmsd,
-						detailed=args.detailed)
+						detailed=args.detailed,
+						print_skips=args.print_skips)
 
 			elif os.path.isdir(arg):
 				# Its a directory, permute each file individually
@@ -740,7 +867,8 @@ def main():
 							out_dir=args.output, 
 							interactive=args.interactive, 
 							rmsd=args.rmsd,
-							detailed=args.detailed)
+							detailed=args.detailed,
+							print_skips=args.print_skips)
 
 			else:
 				print "Unknown argument: {}.  Skipping.".format(arg)
