@@ -49,7 +49,7 @@ import os
 import copy
 import shutil
 
-from itertools import product, permutations
+from itertools import permutations
 from pprint import pprint
 
 try:
@@ -61,7 +61,7 @@ except ImportError:
 # For now, use the module provided, but maybe in future merge this module in here
 import PDB
 
-__version__ = "0.9.2"
+__version__ = "0.9.3"
 
 ###############################################################
 # Program Options
@@ -69,7 +69,7 @@ __version__ = "0.9.2"
 precision = 3 	# Number of decimals to save in float values
 plot_extension = ".pdf" # Default plot extension to use
 figure_size = [10, 10] #Figure size in inches.  Maybe put this in the matplotlibrc file?
-sep="_"
+sep="-"
 rotations_dir="rotations"
 rmsd_fname = "rmsd.txt" # The default name to use for the file saving the RMSD of a molecule
 interference_fname = "interfering.iterations.txt"
@@ -363,6 +363,7 @@ class PDBMolecule(object):
 		if rotation_label:
 			self.rotation_labels.append(rotation_label)
 
+	'''
 	def rotate_branch(self, branch_id, R):
 		"""Rotates a branch by a specified rotation matrix. The 
 		branch is given as a joint_atom and a bond_atom pair.
@@ -410,7 +411,8 @@ class PDBMolecule(object):
 		for atom in st:
 			atom.rotate(R, joint_atom.coordinates, rotation_axis)
 		self.rotated_branches[joint_atom.seq_id].append(branch_atom.seq_id)
-		
+	'''
+
 	def center_coordinates(self):
 		"""Translate the structure so that an atom in the middle lies at 0,0"""
 		
@@ -677,7 +679,7 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 	rot_perms = permutations(xrange(len(Rs)), len(branches))	
 	print "Running . . . "
 	# Iterate over each set of rotations
-	perm_count = 0	
+	perm_count = 1	
 	overlap_count = 0
 	for rot_perm in rot_perms:
 
@@ -720,7 +722,7 @@ def rotation_permutations_from_file(pdb_file, rotation="cubic", verbose=False,
 
 	if verbose:
 		print "Completed permutations on file {}".format(pdb_file)	
-		print "A total of {} permutations were accepted, with {} rejected".format(perm_count, overlap_count)
+		print "A total of {} permutations were accepted, with {} rejected".format(perm_count -1 , overlap_count)
 	if rmsd:
 		rmsd_fd.close()
 	if print_skips:
