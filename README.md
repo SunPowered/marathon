@@ -1,6 +1,5 @@
-Rotational Permutations of RNA Folds
-=====================================
-
+Marathon
+==========
 
 # Goal
 
@@ -11,16 +10,34 @@ are then written back to a *.pdb* format.
 
 # Usage
 
-The program is run from the command line using python 2.7.  It takes the following command line arguments:
+	usage: marathon.py [-h] [-v] [-o OUTPUT] [-c] [-t] [-p] [-i] [-r] [-d]
+    	               [--print-skips]
+    	               args [args ...]
 
-* output: Specifies the output directory to write new files
-* cubic: Use a cubic structure to rotate around (90 deg)
-* triangular: Use a triangular structure to rotate around (45 deg)
-* detailed:  Use detailed rotation names for each branch, otherwise the iterations are autoincremented 
-* verbose (Boolean): Print more information to the console
-* plot (Boolean): Save the permutation structure plots to file
-* interactive (Boolean): Send the plots to the default display to view interactively
-	
+	Program to parse a PDB file, identify isolation loops, and permute molecular
+	rotations around those loops and write back to a set of PDB files
+
+	positional arguments:
+	  args                  One or more filenames or directories
+
+	optional arguments:
+	  -h, --help            show this help message and exit
+	  -v, --verbose         Print details to console
+	  -o OUTPUT, --output OUTPUT
+	                        Output new PDB files to this directory
+	  -c, --cubic           Rotate around a cubic structure (default), i.e. 90 deg
+	  -t, --triangular      Roatate around a triangular structure, i.e. 45 deg
+	  -p, --plot            Plot the rotated molecules in a `plots` subfolder
+	  -i, --interactive     Plot figures interactively
+	  -r, --rmsd            Calculate the root means square distance of each
+	                        iteration and save all values to a file
+	  -d, --detailed        Save the iteration names with detailed information for
+	                        each branch and rotation number, otherwise just use
+	                        the iteration counter as a name
+	  --print-skips         Print the skipped rotation iteration names to a file
+	                        in the output directory
+
+The program is run from the command line using python 2.7.  
 
 ## Examples
 
@@ -41,8 +58,6 @@ The following packages must be installed in the python path:
 
 # Help
 
-Run `marathon.py --help` to get a list of available options
+Run `python marathon.py --help` to get a list of available options
 
-# Author
 
-This script was writting by Tim van Boxtel - 2013
