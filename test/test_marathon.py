@@ -22,7 +22,7 @@ output_directory = os.path.join(base_dir, 'output')
 
 data_args = single_data_file
 #data_args = test_data_directory
-os.system("python {} -o {} -d -r -v --print-skips {}".format(marathon_script, output_directory, data_args))
+os.system("python {} -o {} -d -r -t -v --print-skips {}".format(marathon_script, output_directory, data_args))
  
 
 

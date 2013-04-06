@@ -1,4 +1,4 @@
-%Marathon v0.9.3 Manual 
+%Marathon v0.9.4 Manual 
 %
 %April 6, 2013
 

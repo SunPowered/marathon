@@ -58,10 +58,13 @@ except ImportError:
 	print "This program requires numpy to be installed.  Try `pip install numpy`"
 	sys.exit(1)
 
+#import warnings
+#warnings.simplefilter("error", "RuntimeWarning") 	#	This forces RuntimeWarning to throw an exception
+
 # For now, use the module provided, but maybe in future merge this module in here
 import PDB
 
-__version__ = "0.9.3"
+__version__ = "0.9.4"
 
 ###############################################################
 # Program Options
@@ -339,8 +342,11 @@ class PDBMolecule(object):
 
 			# Get the cross product vector, this is the axis of rotation
 			rotation_axis = numpy.cross(bond_vec, new_vector)
-			rotation_theta = numpy.arccos(numpy.dot(bond_vec, new_vector))
-		
+			
+			bonds_dot = round(numpy.dot(bond_vec, new_vector), precision)
+
+			rotation_theta = numpy.arccos(bonds_dot)
+
 			if numpy.all(rotation_axis == 0):
 				# This happens when the vectors are opposed by pi/2, spin the branch around the z axis
 			
