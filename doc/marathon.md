@@ -1,25 +1,34 @@
-%Marathon Manual
+%Marathon v0.9.3 Manual 
 %
-%April 1, 2013
+%April 6, 2013
 
 # Introduction #
 
 Marathon is a Python script designed to iteratively rotate molecules read from Protein Data Bank files. 
 All rotations along a given lattice are performed for each branch in a molecule and the results are 
-printed to output files.  Plotting of the iterations is also provided.  Currently lattices along the 
-90 degree and 45 degree unit are supported.
+printed to output files.  Plotting of the iterations is also provided.  Currently rotations along a 
+cubic and face centered cubic  (triangular) lattices are supported. 
+The program ensures that no immediate bond overlap will occur.  It can optionally print the 
+overlapping bonds to a file.  The script is also able to iteratively calculate the Root Mean Square
+ Distance  (RMSD) of the molecule and print this to a file.
 
 # Usage #
 
-The script is intended to be run from the command line.  
+The script is intended to be run from the command line, using the Python interpreter version 2.7+.  
 
 ## Requirements ##
 
-Marathon requires [Python v2.7](), as well as the python packages [numpy]() and (Optional for plotting) [matplotlib]().
+Marathon requires [Python v2.7](http://www.python.org), as well as the python packages 
+[numpy](http://www.numpy.org/) and (Optional for plotting) [matplotlib](http://www.matplotlib.org).
 To install the requirements it is advised to use the python `easy_install` or the more recent `pip`, ie:
 
 	pip install numpy
 	pip install matplotlib
+
+There is optionally a `requirements.txt` file provided.  When installing on a new system or a 
+virtual environment, this file can be used with `pip` to install all necessary packages
+
+	pip install -r requirements.txt
 
 ### Mac OSX ###
 
@@ -28,15 +37,44 @@ A good article detailing how to best install numpy and matplotlib on Mac OS-X is
 ## Program Execution ##
 
 This guide assumes that python and the script requirements are installed and available on the system path.  
-Furthermore, it assumes that the `marathon.py` script is also available in the path.  
+Furthermore, it assumes that the `marathon.py` script is also available in the path or the current 
+working directory.  The program is executed with arguments and options, as given
 
-To iterate cubic rotations on a single file `mymol.pdb` and output to a local directory `output_dir`,
+	usage: marathon.py [-h] [-v] [-o OUTPUT] [-c] [-t] [-p] [-i] [-r] [-d]
+    	               [--print-skips]
+    	               args [args ...]
+
+	Program to parse a PDB file, identify isolation loops, and permute molecular
+	rotations around those loops and write back to a set of PDB files
+
+	positional arguments:
+	  args                  One or more filenames or directories
+
+	optional arguments:
+	  -h, --help            show this help message and exit
+	  -v, --verbose         Print details to console
+	  -o OUTPUT, --output OUTPUT
+	                        Output new PDB files to this directory
+	  -c, --cubic           Rotate around a cubic structure (default), i.e. 90 deg
+	  -t, --triangular      Roatate around a triangular structure, i.e. 45 deg
+	  -p, --plot            Plot the rotated molecules in a `plots` subfolder
+	  -i, --interactive     Plot figures interactively
+	  -r, --rmsd            Calculate the root means square distance of each
+	                        iteration and save all values to a file
+	  -d, --detailed        Save the iteration names with detailed information for
+	                        each branch and rotation number, otherwise just use
+	                        the iteration counter as a name
+	  --print-skips         Print the skipped rotation iteration names to a file
+	                        in the output directory
+
+
+For example, to iterate cubic rotations on a single file `mymol.pdb` and output to a local directory `output_dir`,
 one can simply execute::
 
 	python marathon.py -o output_dir mymol.pdb
 
-This will save .pdb files in the `output_dir/mymol/` directory corresponding to each
-rotation iteration
+This will save .pdb files in the `output_dir/mymol/rotations` directory corresponding to each
+rotation iteration.  
 
 By default, the iterations are simply numbered incrementally from 1.  If more detailed iteration names are required,
 the `-d` or `--detailed` flags are available which will save the filenames in a more detailed manner stating the 
@@ -44,20 +82,18 @@ exact rotation matrix on each branch that was applied for that iteration, this t
 the branch number and roation number, accordingly.
 
 The script can optionally calculate the root mean square distance for each iteration.  This is done by calling 
-the `-r` or `--rmsd` flags during program execution.  This will create a file 'rmsd.txt' in the output
+the `-r` or `--rmsd` flags during program execution.  This will create a file `rmsd.txt` in the output
 directory and append the iteration name and rmsd for that iteration.  The script `min_rmsd.py` can read this
 file to output the iterations with the minimum values.
 
-For a full description of all options available from the command line, type::
-
-	python marathon.py --help
-
+The `--print-skips` flag saves the names of any rotations which would lead to a bond overlap at a 
+flexible joint to a file `interfering.iterations.txt` in the output directory.
 
 ## Plotting ##
 
 Marathon also has simple plotting functionality, capable of plotting a molecule
 in 3D space.  This is accomplished using the python matplotlib package. The plots are
-signaled using the `-p` or `--plot` flag upon program execution::
+signaled using the `-p` or `--plot` flag upon program execution
 
 	python marathon.py -o output_dir -p mymol.pdb
 
@@ -66,10 +102,11 @@ will display each plot using matplotlib's interactive plot viewer.  This is usef
 for getting immediate feedback as to what rotations are being performed.  The 
 interactive flag renders the plot flag unneccesary.
 
-If using interactive mode, ensure that an appropriate matplotlib backend is 
-available and configured in your home directory or in a matplotlibrc file
-located in the directory calling the script.  For more info on matplotlib
-backends, see the matplotlib [documentation](http://matplotlib.org/faq/usage_faq.html#what-is-a-backend).
+### Configuration ###
+
+If the interactive plotting is being used, there may be some required local configuration of
+the matplotlib backend that is used to render the plots to a screen.  This is achieved by including a `matplotlibrc` file in the working directory locally or in a Users home folder for a more global 
+implementation.  More on `matplotlibrc` files can be found [here](http://matplotlib.org/users/customizing.html?highlight=matplotlibrc) and more on graphics backends can be found [here](http://matplotlib.org/faq/usage_faq.html#what-is-a-backend).
 
 # Methodology #
 
@@ -79,9 +116,12 @@ rotation lattices presently supported, branch rotations, and rotation branch ove
 
 ## PDB File format ##
 
-The molecules are read and written using the *.pdb* [file format](http://www.wwpdb.org/docs.html) as specified by the World Wide 
-Protein Data Bank.  Marathon currently uses a 3rd party module to read and write the molecules using this format.  The relevant
-information parsed from these files for the purpose of the script are the atom ids, positions and element label, and the bond connections between the atoms
+The molecules are read and written using the [.pdb] file format as specified by the 
+[World Wide Protein Data Bank](http://www.wwpdb.org/docs.html).  
+
+Marathon currently uses a module from the [pymmlib](http://pymmlib.sourceforge.net/) 
+package to read and write the molecules using this format. 
+Relevant information parsed from these files for the purpose of the script are the atom ids, positions and element label, and the bond connections between the atoms
 
 
 ## Branches and Flexible Points ##
@@ -94,59 +134,49 @@ of atoms along that branch are what are rotated for each rotation iteration. The
 by the flexible point and the bond atom is called a **branch vector**.  This branch vector serves as the 
 reference vector for all rotations.  
 
-## Rotation Lattices ## 
+## Branch Rotation ## 
 
-The exact rotations which are used for each branch for each iteration are dependent on the rotation lattice
-that is being applied.  Currently, a cubic (i.e. 90deg) and a triangular (i.e. 45deg) lattice are supported.
-In general, the rotation matrices are computed from using the [Euler-Rodrigues Forumlas](http://en.wikipedia.org/wiki/Euler%E2%80%93Rodrigues_formula).  
+### Unit Rotations ###
 
-### Cubic ###
+Each branch is allowed to be rotated to direct itself along a specified vector.  The exact vector
+is depedent on the the lattice that is being used, i.e. cubic or triangular, as well as the 
+unique iteration being applied.  When a rotation occurs, all of the decendent atoms are also
+rotated accordingly. These so called *unit rotations* are applied iteratively throughout the
+molecule until a given set of unit rotations have been applied.  
+ 
+The exact rotations which are used for each branch for each iteration are dependent on the 
+rotation latticethat is being applied. 
+
+### Cubic Lattice ###
 
 A cubic lattice is the set of 90 degree rotations that a branch can undergo in 3D space. For the unit 
 branch shown in Figure 1, there are 6 unique rotations that can be performed relative to the branch vector.
 
-![cubic unit rotation lattice.  There are 6 rotations per branch](/home/tim/Documents/freelance/projects/2013/03/marathon/doc/img/cubic_lattice.png)
+![cubic unit rotation lattice.  There are 6 rotations per branch](img/cubic_lattice.png)
 
 
-### Triangular ###
+### Triangular Lattice ###
 
-Similar to the cubic case, but the unit branch is rotated in increments of 45 degrees. This set is larger than
-the cubic case with 26 unique rotations on a single unit branch, as can be seen in Figure 2.
+This lattice is similar to the body centered cubic structure as seen in Figure 2. There are 4 rotations along the xy plane, and 8 rotations towards the vertices of an imaginary cube, giving
+12 unique rotations.
 
-![Triangular unit rotation lattice.  There are 26 unique rotations per branch](/home/tim/Documents/freelance/projects/2013/03/marathon/doc/img/triangular_lattice.png)
+![Triangular (i.e. body centre cubic) unit rotation lattice.  There are 12 unique rotations per branch](img/triangular_lattice.png)
 
-## Permutations of Branch Rotations ##
+## Overlap Detection ##
 
-What was described in the section on [rotation lattices](#rotation-lattices) applies to the simple case of 1 flexible point and 2 unique branches.  While
-this aids in forming a convincing picture of the unique rotation lattices, these must all be permuted for
-each branch that is detected. In general there will be an upper limit of ${R}^{B}$ permutations, where $R$ is
-the number of rotations on the unit branch and $B$ is the number of unique branches in the molecule.  This, however,
-does not take into account overlap that will ultimately occur between other bonds in the molecule. 
+Before the entire branch is rotated during an iteration, the new bond direction is compared
+against all other bond vectors at that flexible point which has already been rotated.  
+If any of these rotated bond vectors are in line with the new bond direction. an overlap
+is signalled and the entire rotation iteration is skipped, and the rotation iteration name is
+optionally printed to a file.
 
-### Overlap Detection ###
+## Permutations over the Lattice ##
 
-Before the entire branch is rotated during an iteration, the branch vector is first rotated and compared
-with the other branch vectors sharing the flexible point which have already been rotated for that iteration..  If there is overlap between any branch vector and the rotated branch vector, i.e. if they are parallel,
-then the iteration is discarded as being infeasible.  
-
-If the rotation angle divides the unit circle equally, then there will be 
-
-$${O}_{L} = \sum_{i}^{N}{R(b_{i}-1)}$$ 
-
-overlapping bond rotations, where $b_{i}$ is the number of bonds at flexible point $i$ and $R$ is the 
-number of unit rotations.  This is intuitive as for the $i$th flexible point, there will a total of $R*(b_{i})$ overlaps.
-
-
-## Expected Number of Iterations ##
-
-Combining the rotation lattice and branch numbers with the expected branch overlap yields 
-a total iteration count of 
-
-$${R}^{B} - \sum_{i}^{N}{R(b_{i}-1)}$$
-
-As an example, the unit branch rotated over a cubic lattice results in $R=6$, $B=2$, and ${O}_{L}=6$.  This 
-gives a total of 30 unique rotations without branch overlap. Consequently, for the same molecule and a 
-triangular rotation lattice, $R=26$, $B=2$, ${O}_{L}=26$ giving 650 unique rotations.
+A given lattice has $R$ number of unique vectors for a branch to point.  In the cubic lattice
+case, there are 6.  Each branch can be rotated to face along any one of these vectors.  Over the
+entire molecule made up of $B$ branches, this results in a maximum number of expected permutations 
+  
+$$\frac{R!}{(R - B)!}$$
 
 
 

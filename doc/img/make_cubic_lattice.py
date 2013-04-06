@@ -1,57 +1,68 @@
+"""
+This module constructs a diagram displaying the cubic rotations of a vector
+
+There must be a 3D projection axis, There must be clear vectors coming from the 
+origin along the 90 degree increments.  The vectors must be labeled """
+
+from matplotlib import rc
+font_styles = {'family':'sans-serif',
+		'sans-serif':'Verdana'
+		}
+rc('font', **font_styles)
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+ 
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, 'src'))
+
+try:
+	import marathon
+except ImportError:
+	print "canot find marathon"
+	exit()
+
+node_styles = dict(edgecolors='k', 
+					facecolor='w', 
+					s=300, 
+					marker='o')
+line_styles = dict(lw=3, c='k')
+other_styles = dict(text_offset=1.8)
+
+cubic_vecs = marathon.cubic_bond_directions()
+
+def plot_bond_vector(ax, vector, label=""):
+	ax.scatter(vector[0], vector[1], vector[2], **node_styles)
+	ax.plot([0, vector[0]], [0, vector[1]], [0, vector[2]], **line_styles)
+	offset = other_styles.get('text_offset', 2.0)
+	#t_vec = offset * vector
+	ax.text(offset*vector[0], offset*vector[1], offset*vector[2], label, 
+			fontdict=dict(weight='bold', size=14))
 
 
-# Plot the unit branch
 
 fig = plt.figure(1, figsize=[8,8])
-ax = fig.add_subplot(111, projection="3d")
+ax3d = fig.add_subplot(111, projection="3d")
 
-# Plot the flexible point
-ax.scatter([0],[0],zs=[0], zdir="z", edgecolors='k', facecolor='yellow', s=500, marker='o', label="Flexible Point")
+for N, vec in enumerate(cubic_vecs):
+	rot_label = "R{}".format(N)
+	plot_bond_vector(ax3d, vec, label=rot_label)
 
-# Plot the branch atoms
-ax.scatter([1], [0], zs=[0], zdir="z", edgecolors="k", facecolor="k", s=200, marker='o', label="Branch Atom")
+plt.title("Cubic Rotational Lattice", fontdict=dict(weight='bold', size=18))
 
-ax.scatter([0], [0], zs=[-1], zdir="z", edgecolors="k", facecolor="k", s=200, marker='o', label="Branch Atom")
-
-ax.scatter([0], [1], zs=[0], zdir="z", edgecolors="k", facecolor="k", s=200, marker='o', label="Branch Atom")
-
-ax.scatter([-1], [0], zs=[0], zdir="z", edgecolors="k", facecolor="k", s=200, marker='o', label="Branch Atom")
-
-ax.scatter([0], [-1], zs=[0], zdir="z", edgecolors="k", facecolor="k", s=200, marker='o', label="Branch Atom")
-
-ax.scatter([0], [0], zs=[1], zdir="z", edgecolors="k", facecolor="k", s=200, marker='o', label="Branch Atom")
-
-# Plot the bonds
-
-ax.plot([0,1], [0,0], [0,0], c='k', lw=2, alpha=1)
-ax.plot([0,0], [0,0], [0,-1], c='k', lw=2, alpha=0.5)
-ax.plot([0,0], [0,1], [0,0], c='k', lw=2, alpha=0.5)
-ax.plot([0,-1], [0,0], [0,0], c='k', lw=2, alpha=0.5)
-ax.plot([0,0], [0,-1], [0,0], c='k', lw=2, alpha=0.5)
-ax.plot([0,0], [0,0], [0,1], c='k', lw=2, alpha=0.5)
-
-
-
-
-plt.title("Cubic Rotational Lattice")
-
-limits = 1.1
-ax.set_xlim([-limits, limits])
-ax.set_ylim([-limits, limits])
-ax.set_zlim([-limits, limits])
-ax.plot([-limits, limits],[0,0], [0,0], ls='--', c='k' )
-ax.plot([0,0], [-limits, limits], [0,0], ls='--', c='k' )
-ax.plot([0,0], [0,0], [-limits, limits],ls='--', c='k' )
-ax.set_xticks([])
-ax.set_yticks([])
-ax.set_zticks([])
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
-
-#ax.legend()
+limits = 2.5
+axis_lbl_styles=dict(style='italic', size=10)
+axis_lbl_offset = 1.2
+ax3d.set_xlim([-limits, limits])
+ax3d.set_ylim([-limits, limits])
+ax3d.set_zlim([-limits, limits])
+ax3d.plot([-limits, limits],[0,0], [0,0], ls='--', c='k' )
+ax3d.text(limits*axis_lbl_offset , 0, 0, 'X', fontdict=axis_lbl_styles)
+ax3d.plot([0,0], [-limits, limits], [0,0], ls='--', c='k' )
+ax3d.text(0, limits*axis_lbl_offset , 0, "Y", fontdict=axis_lbl_styles)
+ax3d.plot([0,0], [0,0], [-limits, limits],ls='--', c='k' )
+ax3d.text(0, 0, limits*axis_lbl_offset,  "Z", fontdict=axis_lbl_styles)
+ax3d.set_axis_off()
 
 # Try out the nifty XKCDify module
 #import XKCDify
